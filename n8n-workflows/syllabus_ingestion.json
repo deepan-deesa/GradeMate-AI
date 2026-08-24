@@ -1,0 +1,128 @@
+{
+  "name": "Grade Lens AI - Syllabus Ingestion Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "syllabus-ingestion",
+        "options": {}
+      },
+      "name": "Webhook - Syllabus Uploaded",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "syllabus-ingestion-webhook"
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "name": "Document OCR & Parser",
+      "type": "n8n-nodes-base.readBinaryFiles",
+      "typeVersion": 1,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "chunkSize": 500,
+        "chunkOverlap": 50
+      },
+      "name": "Text Splitter & Chunking",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "modelName": "text-embedding-3-small"
+      },
+      "name": "Embeddings Generator",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1,
+      "position": [910, 300]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "tableName": "syllabus_chunks"
+      },
+      "name": "pgvector Storage Node",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1130, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:5000/api/webhooks/n8n/syllabus-complete",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"curriculumId\": \"{{ $node['Webhook - Syllabus Uploaded'].json['body']['curriculumId'] }}\",\n  \"status\": \"Analysed\",\n  \"chunksProcessed\": {{ $json.length }}\n}"
+      },
+      "name": "Callback to Backend API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1350, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Syllabus Uploaded": {
+      "main": [
+        [
+          {
+            "node": "Document OCR & Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document OCR & Parser": {
+      "main": [
+        [
+          {
+            "node": "Text Splitter & Chunking",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Splitter & Chunking": {
+      "main": [
+        [
+          {
+            "node": "Embeddings Generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Generator": {
+      "main": [
+        [
+          {
+            "node": "pgvector Storage Node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pgvector Storage Node": {
+      "main": [
+        [
+          {
+            "node": "Callback to Backend API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "1.0.0"
+}

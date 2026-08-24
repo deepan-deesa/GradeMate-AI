@@ -1,0 +1,142 @@
+{
+  "name": "Grade Lens AI - Step-by-Step Answer Sheet Grading Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "answer-sheet-grading",
+        "options": {}
+      },
+      "name": "Webhook - Answer Sheet Uploaded",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "answer-sheet-grading-webhook"
+    },
+    {
+      "parameters": {
+        "operation": "transcribeAudioOrVision",
+        "options": {}
+      },
+      "name": "Handwritten Math Vision OCR",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT chunk_text FROM syllabus_chunks WHERE curriculum_id = '{{ $node[\"Webhook - Answer Sheet Uploaded\"].json[\"body\"][\"curriculumId\"] }}' ORDER BY embedding <-> '{{ $node[\"Handwritten Math Vision OCR\"].json[\"extractedText\"] }}' LIMIT 3;"
+      },
+      "name": "pgvector Rubric Lookup",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are Grade Lens AI's Lead Math Evaluator. Analyze handwritten work step-by-step against the official syllabus rubric. Flag exact step numbers, assign step correctness (correct/incorrect/partial), categorize errors (e.g. sign_error, formula_mismatch, arithmetic_slip), and calculate visual bounding box annotation tags."
+            },
+            {
+              "role": "user",
+              "content": "=Extracted Work:\n{{ $node[\"Handwritten Math Vision OCR\"].json[\"extractedText\"] }}\n\nRubric & Topics:\n{{ $node[\"pgvector Rubric Lookup\"].json[\"chunk_text\"] }}"
+            }
+          ]
+        }
+      },
+      "name": "Step-by-Step Evaluation Agent",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1,
+      "position": [910, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://backend:5000/api/webhooks/n8n/grading-complete",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"submissionId\": \"{{ $node['Webhook - Answer Sheet Uploaded'].json['body']['submissionId'] }}\",\n  \"status\": \"APPROVED\",\n  \"totalScore\": {{ $node['Step-by-Step Evaluation Agent'].json['totalScore'] }},\n  \"maxScore\": {{ $node['Step-by-Step Evaluation Agent'].json['maxScore'] }},\n  \"steps\": {{ JSON.stringify($node['Step-by-Step Evaluation Agent'].json['steps']) }}\n}"
+      },
+      "name": "Writeback to Express Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1130, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "notifications@gradelens.ai",
+        "toEmail": "={{ $node['Webhook - Answer Sheet Uploaded'].json['body']['teacherEmail'] }}",
+        "subject": "Grading Complete for Assignment Submission",
+        "text": "=The evaluation for submission {{ $node['Webhook - Answer Sheet Uploaded'].json['body']['submissionId'] }} has completed successfully. Login to Grade Lens AI to review or approve."
+      },
+      "name": "Send Teacher Notification",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [1350, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Answer Sheet Uploaded": {
+      "main": [
+        [
+          {
+            "node": "Handwritten Math Vision OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handwritten Math Vision OCR": {
+      "main": [
+        [
+          {
+            "node": "pgvector Rubric Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pgvector Rubric Lookup": {
+      "main": [
+        [
+          {
+            "node": "Step-by-Step Evaluation Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step-by-Step Evaluation Agent": {
+      "main": [
+        [
+          {
+            "node": "Writeback to Express Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Writeback to Express Backend": {
+      "main": [
+        [
+          {
+            "node": "Send Teacher Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "1.0.0"
+}

@@ -1,0 +1,190 @@
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+enum Role {
+  TEACHER
+  STUDENT
+}
+
+enum CurriculumStatus {
+  Uploading
+  Reading
+  Understanding
+  Identifying_Units
+  Identifying_Topics
+  Creating_Knowledge_Base
+  Analysed
+  Failed
+}
+
+enum EvaluationStatus {
+  PENDING
+  APPROVED
+  OVERRIDDEN
+}
+
+enum StepStatus {
+  correct
+  incorrect
+  partial
+}
+
+model User {
+  id           String       @id @default(uuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         Role         @default(TEACHER)
+  studentId    String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  curricula    Curriculum[]
+  assessments  Assessment[]
+  answerSheets AnswerSheet[]
+  topicProgress StudentTopicProgress[]
+}
+
+model Curriculum {
+  id            String           @id @default(uuid())
+  teacherId     String
+  teacher       User             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  name          String
+  board         String
+  class         String
+  subject       String
+  academicYear  String
+  fileUrl       String?
+  fileName      String?
+  status        CurriculumStatus @default(Reading)
+  unitsCount    Int              @default(0)
+  topicsCount   Int              @default(0)
+  conceptsCount Int              @default(0)
+  rawText       String?          @db.Text
+  createdAt     DateTime         @default(now())
+
+  topics        CurriculumTopic[]
+  chunks        CurriculumChunk[]
+  assessments   Assessment[]
+}
+
+model CurriculumTopic {
+  id                     String     @id @default(uuid())
+  curriculumId           String
+  curriculum             Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  unit                   String
+  topic                  String
+  subtopic               String?
+  concept                String
+  learningObjective      String
+  importantFormulas      String[]   @default([])
+  expectedMethods        String[]   @default([])
+  expectedKnowledgeLevel String?
+}
+
+model CurriculumChunk {
+  id           String     @id @default(uuid())
+  curriculumId String
+  curriculum   Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  teacherId    String
+  unit         String
+  topic        String
+  content      String     @db.Text
+  createdAt    DateTime   @default(now())
+}
+
+model Assessment {
+  id           String      @id @default(uuid())
+  teacherId    String
+  teacher      User        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  curriculumId String
+  curriculum   Curriculum  @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  title        String
+  subject      String
+  totalMarks   Int
+  dueDate      DateTime
+  createdAt    DateTime    @default(now())
+
+  questions    Question[]
+  answerSheets AnswerSheet[]
+}
+
+model Question {
+  id               String       @id @default(uuid())
+  assessmentId     String
+  assessment       Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questionNumber   Int
+  questionText     String       @db.Text
+  maxMarks         Int
+  unit             String
+  topic            String
+  expectedConcepts String[]     @default([])
+  expectedMethod   String?
+
+  evaluations      Evaluation[]
+}
+
+model AnswerSheet {
+  id           String       @id @default(uuid())
+  assessmentId String
+  assessment   Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      User         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fileUrl      String
+  status       String       @default("Uploaded")
+  submittedAt  DateTime     @default(now())
+
+  evaluations  Evaluation[]
+}
+
+model Evaluation {
+  id              String           @id @default(uuid())
+  answerSheetId   String
+  answerSheet     AnswerSheet      @relation(fields: [answerSheetId], references: [id], onDelete: Cascade)
+  questionId      String
+  question        Question         @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  score           Float
+  maxScore        Float
+  overallStatus   String
+  overallFeedback String           @db.Text
+  aiConfidence    Float            @default(0.92)
+  status          EvaluationStatus @default(PENDING)
+  createdAt       DateTime         @default(now())
+
+  steps           EvaluationStep[]
+}
+
+model EvaluationStep {
+  id           String     @id @default(uuid())
+  evaluationId String
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  stepNumber   Int
+  studentWork  String
+  status       StepStatus @default(correct)
+  errorType    String?
+  marks        Float
+  feedback     String     @db.Text
+  correction   String?    @db.Text
+}
+
+model StudentTopicProgress {
+  id             String     @id @default(uuid())
+  studentId      String
+  student        User       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  curriculumId   String
+  topic          String
+  attempts       Int        @default(1)
+  averageScore   Float
+  accuracy       Float
+  weaknessLevel  String     @default("Developing")
+  updatedAt      DateTime   @updatedAt
+}

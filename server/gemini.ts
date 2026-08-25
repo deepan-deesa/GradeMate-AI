@@ -138,57 +138,86 @@ export function retrieveSyllabusContext(curriculumId: string, query: string, tea
 }
 
 function generateSmartFallbackSyllabus(input: SyllabusUploadInput) {
-  const isMath = input.subject.toLowerCase().includes('math');
-  const topics = isMath
-    ? [
-        {
-          unit: 'Algebra',
-          topic: 'Linear Equations in Two Variables',
-          subtopic: 'Algebraic Solution Methods',
-          concept: 'Isolation of Variables & Inverse Operations',
-          learningObjective: 'Solve linear equations using substitution, elimination, and inverse operations.',
-          importantFormulas: ['ax + b = c', '2x + 5 = 15 => 2x = 10 => x = 5'],
-          expectedMethods: ['Substitution Method', 'Elimination Method', 'Algebraic Isolation'],
-          expectedKnowledgeLevel: 'Application & Problem Solving'
-        },
-        {
-          unit: 'Algebra',
-          topic: 'Quadratic Equations',
-          subtopic: 'Factoring & Quadratic Formula',
-          concept: 'Discriminant Analysis & Real Roots',
-          learningObjective: 'Determine real roots using factoring by splitting middle term or quadratic formula.',
-          importantFormulas: ['x = (-b ± √(b² - 4ac)) / (2a)', 'D = b² - 4ac'],
-          expectedMethods: ['Middle Term Factoring', 'Quadratic Formula'],
-          expectedKnowledgeLevel: 'Analysis & Evaluation'
-        },
-        {
-          unit: 'Geometry',
-          topic: 'Coordinate Geometry & Triangles',
-          subtopic: 'Distance & Section Formula',
-          concept: 'Geometric Proofs & Pythagoras Theorem',
-          learningObjective: 'Apply coordinate distance formula and section formula to compute geometric dimensions.',
-          importantFormulas: ['d = √((x₂ - x₁)² + (y₂ - y₁)²)', 'a² + b² = c²'],
-          expectedMethods: ['Coordinate Substitution', 'Proof Derivation'],
-          expectedKnowledgeLevel: 'Problem Solving'
+  const text = (input.raw_text || '').trim();
+
+  // If raw_text is provided, parse actual units/topics directly from the syllabus document text!
+  if (text && text.length > 10 && !text.endsWith('Syllabus content')) {
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const topics: Partial<CurriculumTopic>[] = [];
+    
+    let currentUnit = `${input.subject} Core Syllabus`;
+
+    lines.forEach((line) => {
+      // Check for Unit / Chapter headings
+      if (/^(unit|chapter|module|section|part)\s+\d+[:\.\s-]/i.test(line) || /^[A-Z0-9\s]{4,30}:$/i.test(line)) {
+        currentUnit = line.replace(/^[:\s-]+|[:\s-]+$/g, '');
+      } else if (/^(\d+\.|\d+\)|\-|\*|topic[:\s])/i.test(line) || (line.length > 4 && line.length < 90 && !line.endsWith('.'))) {
+        const cleaned = line.replace(/^(\d+[\.\)]|\-|\*|topic[:\s])\s*/i, '').trim();
+        if (cleaned && cleaned.length > 3) {
+          topics.push({
+            unit: currentUnit,
+            topic: cleaned,
+            subtopic: `Subtopics for ${cleaned}`,
+            concept: `Core concepts in ${cleaned}`,
+            learningObjective: `Understand and apply principles of ${cleaned} in ${input.subject}.`,
+            importantFormulas: [`Formulas for ${cleaned}`],
+            expectedMethods: [`Standard ${input.subject} problem solving methods`],
+            expectedKnowledgeLevel: 'Conceptual & Practical Mastery',
+          });
         }
-      ]
-    : [
-        {
-          unit: 'Physics / Mechanics',
-          topic: 'Laws of Motion & Electricity',
-          subtopic: 'Kinematics & Ohm Law',
-          concept: 'Force, Acceleration & Electrical Resistance',
-          learningObjective: 'Apply F=ma and V=IR to analyze physical circuits and mechanical systems.',
-          importantFormulas: ['F = ma', 'V = IR', 'P = VI'],
-          expectedMethods: ['Algebraic Formula Substitution', 'Unit Dimensional Analysis'],
-          expectedKnowledgeLevel: 'Application'
-        }
-      ];
+      }
+    });
+
+    if (topics.length > 0) {
+      const chunks = topics.map((t) => ({
+        unit: t.unit,
+        topic: t.topic,
+        content: `Unit: ${t.unit} | Topic: ${t.topic} | Concept: ${t.concept} | Learning Objective: ${t.learningObjective}`,
+      }));
+
+      return {
+        topics,
+        chunks,
+        summary: {
+          unitsCount: new Set(topics.map((t) => t.unit)).size,
+          topicsCount: topics.length,
+          conceptsCount: topics.length * 2,
+        },
+      };
+    }
+  }
+
+  // Fallback if no file text provided: derive from syllabus title and subject
+  const subjectName = input.subject || 'Subject';
+  const syllabusName = input.name || 'Course';
+
+  const topics: Partial<CurriculumTopic>[] = [
+    {
+      unit: `${input.subject} - Core Module 1`,
+      topic: `${syllabusName} Foundations`,
+      subtopic: 'Core Definitions & Principles',
+      concept: `Fundamental concepts of ${subjectName}`,
+      learningObjective: `Master foundational principles of ${subjectName} according to ${input.board} ${input.class_year} guidelines.`,
+      importantFormulas: [`Standard ${subjectName} Equations`],
+      expectedMethods: ['Analytical Methods', 'Problem Solving'],
+      expectedKnowledgeLevel: 'Core Understanding',
+    },
+    {
+      unit: `${input.subject} - Core Module 2`,
+      topic: `${syllabusName} Advanced Analysis`,
+      subtopic: 'Applications & Problem Solving',
+      concept: `Advanced application in ${subjectName}`,
+      learningObjective: `Apply analytical methods to solve complex ${subjectName} problems.`,
+      importantFormulas: [`Advanced ${subjectName} Formulas`],
+      expectedMethods: ['Step-by-step Reasoning', 'Validation'],
+      expectedKnowledgeLevel: 'Application & Mastery',
+    },
+  ];
 
   const chunks = topics.map((t) => ({
     unit: t.unit,
     topic: t.topic,
-    content: `Unit: ${t.unit} | Topic: ${t.topic} | Concept: ${t.concept} | Learning Objective: ${t.learningObjective} | Expected Methods: ${t.expectedMethods.join(', ')}`,
+    content: `Unit: ${t.unit} | Topic: ${t.topic} | Concept: ${t.concept} | Learning Objective: ${t.learningObjective}`,
   }));
 
   return {
@@ -197,7 +226,7 @@ function generateSmartFallbackSyllabus(input: SyllabusUploadInput) {
     summary: {
       unitsCount: new Set(topics.map((t) => t.unit)).size,
       topicsCount: topics.length,
-      conceptsCount: topics.length * 3,
+      conceptsCount: topics.length * 2,
     },
   };
 }

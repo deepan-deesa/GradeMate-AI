@@ -69,49 +69,35 @@ export const Header: React.FC = () => {
               </button>
             )}
 
-            {/* Clear Database */}
+            {/* Clear Database (Development Reset with Confirmation) */}
             <button
-              onClick={() => resetToDemo()}
+              onClick={() => {
+                if (window.confirm('Are you sure you want to clear all database records and start fresh in Supabase?')) {
+                  resetToDemo();
+                }
+              }}
               className="px-3 py-1.5 bg-[#23382F] hover:bg-[#1E3028] text-[#FDFCF8] border border-[#3A5A40] rounded-lg text-xs font-medium flex items-center space-x-1.5 transition-colors"
-              title="Clear all data and start fresh in Supabase"
+              title="Clear database records"
             >
               <RotateCcw className="w-3.5 h-3.5 text-[#C88A58]" />
               <span className="hidden md:inline">Clear Data</span>
             </button>
 
-            {/* Role Switcher Toggle (Hidden on Login View & Hidden for logged-in Students) */}
-            {activeView !== 'login' && (
-              userSession?.role === 'STUDENT' ? (
-                <div className="px-3 py-1 bg-[#C88A58]/20 border border-[#C88A58]/40 rounded-xl text-xs text-[#E0C097] font-semibold flex items-center space-x-1.5">
-                  <UserCheck className="w-3.5 h-3.5 text-[#C88A58]" />
-                  <span>Student Portal</span>
-                </div>
-              ) : (
-                <div className="bg-[#23382F] p-1 rounded-xl border border-[#3A5A40] flex items-center space-x-1">
-                  <button
-                    onClick={() => setRole('TEACHER')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center space-x-1 transition-all ${
-                      role === 'TEACHER'
-                        ? 'bg-[#3A5A40] text-[#FDFCF8] shadow-sm font-semibold'
-                        : 'text-[#A3B19B] hover:text-[#FDFCF8]'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Teacher</span>
-                  </button>
-                  <button
-                    onClick={() => setRole('STUDENT')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center space-x-1 transition-all ${
-                      role === 'STUDENT'
-                        ? 'bg-[#C88A58] text-[#FDFCF8] shadow-sm font-semibold'
-                        : 'text-[#A3B19B] hover:text-[#FDFCF8]'
-                    }`}
-                  >
-                    <UserCheck className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Student</span>
-                  </button>
-                </div>
-              )
+            {/* Role Badge Status (Strict Role Separation) */}
+            {userSession && (
+              <div className="px-3 py-1 rounded-xl text-xs font-bold border flex items-center space-x-1.5 shadow-xs transition-all bg-[#23382F] border-[#3A5A40] text-[#E0DED7]">
+                {userSession.role === 'TEACHER' ? (
+                  <>
+                    <Users className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Teacher Portal</span>
+                  </>
+                ) : (
+                  <>
+                    <UserCheck className="w-3.5 h-3.5 text-[#C88A58]" />
+                    <span>Student Portal</span>
+                  </>
+                )}
+              </div>
             )}
 
             {/* User Session Chip / Logout */}

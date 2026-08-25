@@ -102,38 +102,41 @@ export const CurriculumView: React.FC = () => {
     }
   };
 
+  const handleDeleteSyllabus = (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to delete "${name}" and its AI knowledge base from the database?`)) {
+      deleteSyllabus(id);
+    }
+  };
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-[#E0DED7] pb-4">
+    <div className="space-y-6">
+      {/* HEADER BAR */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#E0DED7] shadow-sm">
         <div>
           <div className="flex items-center space-x-2">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#EAF0E8] text-[#1E3A2B] border border-[#C2D4C1]">
-              Teacher Portal
-            </span>
+            <BookOpen className="w-5 h-5 text-[#2D4A3E]" />
             <span className="text-xs text-[#6E7269]">Curriculum & Syllabus Knowledge Base</span>
           </div>
           <h1 className="text-2xl font-black text-[#222521] mt-1">Syllabus Upload & AI Syllabus Analysis</h1>
-          <p className="text-xs text-[#545850]">
-            Upload course syllabi to create isolated AI evaluation knowledge bases tailored specifically to your curriculum
+          <p className="text-xs text-[#6E7269] mt-0.5">
+            Uploaded course syllabi serve as the ground-truth standard for evaluation rubrics and student mastery tracking.
           </p>
         </div>
 
         <button
           onClick={() => setShowUploadModal(true)}
-          className="px-4 py-2.5 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-[#FDFCF8] rounded-xl font-bold text-xs shadow-sm flex items-center space-x-2 transition-all shrink-0"
+          className="px-5 py-3 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white rounded-xl font-bold text-sm transition-all shadow-sm flex items-center space-x-2 self-start md:self-auto"
         >
           <Upload className="w-4 h-4" />
           <span>Upload & Analyse Syllabus</span>
         </button>
       </div>
 
-      {/* Syllabi Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Syllabi List */}
+        {/* Left: Syllabus Selector Sidebar */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-[#6E7269] uppercase tracking-wider">
+            <h2 className="font-bold text-sm text-[#222521]">
               Uploaded Syllabi ({curricula.length})
             </h2>
           </div>
@@ -164,10 +167,22 @@ export const CurriculumView: React.FC = () => {
                       </div>
                     </div>
 
-                    <span className="px-2.5 py-0.5 text-[10px] font-bold bg-[#EAF0E8] text-[#1E3A2B] border border-[#C2D4C1] rounded-full flex items-center space-x-1">
-                      <CheckCircle2 className="w-3 h-3 text-[#2D4A3E]" />
-                      <span>{sys.status}</span>
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2.5 py-0.5 text-[10px] font-bold bg-[#EAF0E8] text-[#1E3A2B] border border-[#C2D4C1] rounded-full flex items-center space-x-1">
+                        <CheckCircle2 className="w-3 h-3 text-[#2D4A3E]" />
+                        <span>{sys.status}</span>
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteSyllabus(sys.id, sys.name);
+                        }}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete syllabus"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#E0DED7] text-center text-xs">
@@ -211,9 +226,9 @@ export const CurriculumView: React.FC = () => {
                     View & Edit Curriculum
                   </button>
                   <button
-                    onClick={() => deleteSyllabus(activeCurriculum.id)}
+                    onClick={() => handleDeleteSyllabus(activeCurriculum.id, activeCurriculum.name)}
                     className="p-2 text-[#991B1B] hover:bg-[#FDF0EE] rounded-xl border border-[#ECC4C1] transition-all"
-                    title="Delete Syllabus"
+                    title="Delete Syllabus from Database"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

@@ -12,20 +12,16 @@ export const StudentPerformanceView: React.FC = () => {
       (s.id === selectedStudentId)
   );
 
-  const strongTopics = currentStudent?.strongTopics?.length
-    ? currentStudent.strongTopics.map((t: string, i: number) => ({ name: t, mastery: 90 - i * 4 }))
-    : [
-        { name: 'Linear Equations Setup', mastery: 92 },
-        { name: 'Substitution & Isolation', mastery: 88 },
-        { name: 'Algebraic Graphing', mastery: 85 }
-      ];
+  const strongTopics = (currentStudent?.strongTopics || []).map((t: string) => ({
+    name: t,
+    mastery: 85,
+  }));
 
-  const weakTopics = currentStudent?.weakTopics?.length
-    ? currentStudent.weakTopics.map((t: string, i: number) => ({ name: t, weakness: 'Concept Slip', mastery: 64 - i * 5 }))
-    : [
-        { name: 'Integer Division Slips', weakness: 'Arithmetic Error', mastery: 64 },
-        { name: 'Parenthesis Sign Transposition', weakness: 'Sign Error', mastery: 58 }
-      ];
+  const weakTopics = (currentStudent?.needs_improvement || currentStudent?.weakTopics || []).map((t: string) => ({
+    name: t,
+    weakness: 'Learning Gap',
+    mastery: 55,
+  }));
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">

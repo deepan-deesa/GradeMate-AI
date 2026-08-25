@@ -23,8 +23,16 @@ export interface UserAccount {
   createdAt: string;
 }
 
+export interface TeacherStudentRel {
+  id: string;
+  teacherId: string;
+  studentId: string;
+  createdAt?: string;
+}
+
 export interface AppDatabase {
   users: UserAccount[];
+  teacherStudents: TeacherStudentRel[];
   evaluationSettings?: EvaluationSettings;
   curricula: Curriculum[];
   curriculumTopics: CurriculumTopic[];

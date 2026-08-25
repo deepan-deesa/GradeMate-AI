@@ -54,19 +54,11 @@ export const LandingPage: React.FC = () => {
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
               <button
-                onClick={() => setActiveView('upload')}
+                onClick={() => setActiveView('login')}
                 className="w-full sm:w-auto px-8 py-4 bg-[#2D4A3E] hover:bg-[#23382F] text-[#FDFCF8] font-bold rounded-2xl shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 flex items-center justify-center space-x-2 text-base"
               >
-                <span>Start Grading</span>
+                <span>Get Started & Sign In</span>
                 <ArrowRight className="w-5 h-5" />
-              </button>
-
-              <button
-                onClick={handleQuickDemoFlow}
-                className="w-full sm:w-auto px-8 py-4 bg-[#EAE7DF] hover:bg-[#E0DDD3] border border-[#D5D1C5] text-[#222521] font-bold rounded-2xl transition-all flex items-center justify-center space-x-2 text-base shadow-xs"
-              >
-                <Play className="w-4 h-4 text-[#3A5A40] fill-[#3A5A40]" />
-                <span>See How It Works (2-Min Demo)</span>
               </button>
             </div>
 
@@ -213,23 +205,23 @@ export const LandingPage: React.FC = () => {
             <button
               onClick={() => {
                 setRole('TEACHER');
-                setActiveView('dashboard');
+                setActiveView('login');
               }}
               className="w-full sm:w-auto px-8 py-4 bg-[#2D4A3E] hover:bg-[#23382F] text-[#FDFCF8] font-bold rounded-2xl shadow-md flex items-center justify-center space-x-3 transition-all"
             >
               <Users className="w-5 h-5" />
-              <span>Enter Teacher Dashboard</span>
+              <span>Teacher Portal Sign In</span>
             </button>
 
             <button
               onClick={() => {
                 setRole('STUDENT');
-                setActiveView('student_dashboard');
+                setActiveView('login');
               }}
               className="w-full sm:w-auto px-8 py-4 bg-[#C88A58] hover:bg-[#B47747] text-[#FDFCF8] font-bold rounded-2xl shadow-md flex items-center justify-center space-x-3 transition-all"
             >
               <GraduationCap className="w-5 h-5" />
-              <span>Enter Student Dashboard</span>
+              <span>Student Portal Sign In</span>
             </button>
           </div>
         </div>

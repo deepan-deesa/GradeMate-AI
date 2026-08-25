@@ -13,15 +13,16 @@ export const StudentMistakesView: React.FC = () => {
   );
 
   const studentName = userSession?.name || currentStudent?.name;
-  const studentId = userSession?.studentId || currentStudent?.id || selectedStudentId;
+  const studentId = userSession?.studentId || currentStudent?.id;
 
   const studentSubmissions = (dbState?.submissions || []).filter(
     (s: any) =>
       (studentId && s.student_id === studentId) ||
+      (userSession?.email && s.student_email?.toLowerCase() === userSession.email.toLowerCase()) ||
       (studentName && s.student_name?.toLowerCase() === studentName.toLowerCase())
   );
 
-  const dynamicMistakes = studentSubmissions
+  const mistakeHistory = studentSubmissions
     .filter((sub: any) => !sub.final_answer_correct || sub.student_steps?.some((st: any) => !st.correct))
     .map((sub: any, idx: number) => {
       const errStep = sub.student_steps?.find((st: any) => !st.correct);
@@ -35,29 +36,6 @@ export const StudentMistakesView: React.FC = () => {
         recommendation: 'Complete targeted practice questions on this concept.'
       };
     });
-
-  const defaultMistakes = [
-    {
-      id: 'm1',
-      topic: 'Linear Equations',
-      question: '2x + 5 = 15 => 2x = 10 => x = 6',
-      errorType: 'Arithmetic Error',
-      description: 'Calculated 10 ÷ 2 = 6 instead of 5 in the final division step.',
-      socraticHint: 'What is 10 divided by 2?',
-      recommendation: 'Complete 3 quick division drills to strengthen mental arithmetic accuracy.'
-    },
-    {
-      id: 'm2',
-      topic: 'Algebraic Simplification',
-      question: '-(2x - 5) + 3x => -2x - 5 + 3x',
-      errorType: 'Sign Error',
-      description: 'Forgot to distribute negative sign to second term inside parentheses: -(-5) becomes +5.',
-      socraticHint: 'When expanding -(a - b), what happens to the sign of -b?',
-      recommendation: 'Practice parenthesis expansion with negative coefficients.'
-    }
-  ];
-
-  const mistakeHistory = dynamicMistakes.length > 0 ? dynamicMistakes : defaultMistakes;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -84,32 +62,42 @@ export const StudentMistakesView: React.FC = () => {
       </div>
 
       <div className="space-y-4">
-        {mistakeHistory.map((m) => (
-          <div key={m.id} className="bg-white p-6 rounded-2xl border border-[#E0DED7] shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E0DED7] pb-3">
-              <span className="text-xs font-bold text-[#C88A58]">{m.topic}</span>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FDF0EE] text-[#991B1B] border border-[#ECC4C1]">
-                {m.errorType}
-              </span>
-            </div>
-
-            <div>
-              <p className="text-xs text-[#6E7269] font-semibold">Your Step & Slip:</p>
-              <p className="text-sm font-bold text-[#222521] font-mono bg-[#FDFCF8] p-2.5 rounded-lg border border-[#E0DED7] mt-1">
-                {m.question}
-              </p>
-              <p className="text-xs text-[#545850] mt-2">{m.description}</p>
-            </div>
-
-            <div className="p-3.5 bg-[#FAF0E6] rounded-xl border border-[#E8CEB5] space-y-1 text-xs">
-              <div className="flex items-center space-x-1.5 font-bold text-[#8C521F]">
-                <Lightbulb className="w-4 h-4 text-[#C88A58]" />
-                <span>Socratic Guiding Hint:</span>
-              </div>
-              <p className="text-[#8C521F] font-medium pl-5">{m.socraticHint}</p>
-            </div>
+        {mistakeHistory.length === 0 ? (
+          <div className="bg-white p-12 rounded-2xl border border-[#E0DED7] text-center space-y-3">
+            <AlertTriangle className="w-12 h-12 text-[#6E7269] mx-auto" />
+            <h3 className="text-lg font-bold text-[#222521]">No learning gaps or mistakes detected yet</h3>
+            <p className="text-xs text-[#545850] max-w-md mx-auto">
+              Calculation slips or structural sign errors identified from your evaluated answer sheets will appear here with Socratic corrective hints.
+            </p>
           </div>
-        ))}
+        ) : (
+          mistakeHistory.map((m) => (
+            <div key={m.id} className="bg-white p-6 rounded-2xl border border-[#E0DED7] shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-[#E0DED7] pb-3">
+                <span className="text-xs font-bold text-[#C88A58]">{m.topic}</span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FDF0EE] text-[#991B1B] border border-[#ECC4C1]">
+                  {m.errorType}
+                </span>
+              </div>
+
+              <div>
+                <p className="text-xs text-[#6E7269] font-semibold">Your Step & Slip:</p>
+                <p className="text-sm font-bold text-[#222521] font-mono bg-[#FDFCF8] p-2.5 rounded-lg border border-[#E0DED7] mt-1">
+                  {m.question}
+                </p>
+                <p className="text-xs text-[#545850] mt-2">{m.description}</p>
+              </div>
+
+              <div className="p-3.5 bg-[#FAF0E6] rounded-xl border border-[#E8CEB5] space-y-1 text-xs">
+                <div className="flex items-center space-x-1.5 font-bold text-[#8C521F]">
+                  <Lightbulb className="w-4 h-4 text-[#C88A58]" />
+                  <span>Socratic Guiding Hint:</span>
+                </div>
+                <p className="text-[#8C521F] font-medium pl-5">{m.socraticHint}</p>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

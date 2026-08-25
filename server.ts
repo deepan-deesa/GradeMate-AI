@@ -46,9 +46,107 @@ async function startServer() {
     res.json({ status: 'ok', service: 'GradeMate AI Engine' });
   });
 
-  // DB State
-  app.get('/api/db/state', (req, res) => {
-    res.json(getDatabase());
+  // DB State (Teacher-Scoped Data Isolation)
+  app.get('/api/db/state', async (req, res) => {
+    try {
+      const reqTeacherId = (req.query.teacherId || req.headers['x-teacher-id']) as string | undefined;
+      const reqRole = (req.query.role || req.headers['x-user-role']) as string | undefined;
+      const reqStudentId = (req.query.studentId || req.headers['x-student-id']) as string | undefined;
+
+      const db = await getDatabaseAsync();
+      if (!db.teacherStudents) db.teacherStudents = [];
+
+      if (reqRole === 'TEACHER' && reqTeacherId) {
+        let teacherRels = db.teacherStudents.filter((ts) => ts.teacherId === reqTeacherId);
+        // Only populate initial demo students for explicit demo teacher account if no relationships exist
+        if (teacherRels.length === 0 && reqTeacherId === 'usr_teacher_demo') {
+          const initialStudents = db.students || [];
+          if (initialStudents.length > 0) {
+            initialStudents.forEach((s) => {
+              if (!db.teacherStudents.some((ts) => ts.teacherId === reqTeacherId && ts.studentId === s.id)) {
+                db.teacherStudents.push({
+                  id: `ts_${reqTeacherId}_${s.id}`,
+                  teacherId: reqTeacherId,
+                  studentId: s.id,
+                  createdAt: new Date().toISOString(),
+                });
+              }
+            });
+            teacherRels = db.teacherStudents.filter((ts) => ts.teacherId === reqTeacherId);
+          }
+        }
+
+        const assignedStudentIds = teacherRels.map((ts) => ts.studentId);
+
+        const scopedStudents = (db.students || []).filter((s) => assignedStudentIds.includes(s.id));
+        const scopedAssignments = (db.assignments || []).filter(
+          (a: any) => a.teacherId === reqTeacherId || a.teacher_id === reqTeacherId
+        );
+        const scopedSubmissions = (db.submissions || []).filter(
+          (sub: any) => assignedStudentIds.includes(sub.student_id) || sub.teacher_id === reqTeacherId
+        );
+
+        const scopedGroups = (db.groups || [])
+          .map((g: any) => ({
+            ...g,
+            students: (g.students || []).filter((st: any) => assignedStudentIds.includes(st.id)),
+          }))
+          .filter((g: any) => g.students.length > 0);
+
+        const scopedNextBestActions = (db.nextBestActions || []).filter(
+          (nba: any) => !nba.student_id || assignedStudentIds.includes(nba.student_id)
+        );
+        const scopedInterventions = (db.interventions || []).filter((inv: any) => assignedStudentIds.includes(inv.student_id));
+        const scopedPracticeSets = (db.practiceSets || []).filter((ps: any) => assignedStudentIds.includes(ps.student_id));
+
+        const totalStudents = scopedStudents.length;
+        const totalAssignments = scopedAssignments.length;
+        const avgScore =
+          scopedSubmissions.length > 0
+            ? Math.round(
+                scopedSubmissions.reduce((acc: number, s: any) => acc + (s.score / s.max_score) * 100, 0) /
+                  scopedSubmissions.length
+              )
+            : 0;
+        const supportNeeded = scopedStudents.filter((s: any) => (s.overall_mastery || s.overallAccuracy || 100) < 60).length;
+
+        const scopedClassStats = {
+          totalStudents,
+          totalAssignments,
+          averageClassScore: avgScore,
+          commonLearningGap: scopedStudents.length > 0 ? (scopedStudents[0].common_error || 'None recorded') : 'None recorded yet',
+          studentsNeedingSupport: supportNeeded,
+          interventionSuccessRate: db.classStats?.interventionSuccessRate || 0,
+        };
+
+        return res.json({
+          ...db,
+          students: scopedStudents,
+          assignments: scopedAssignments,
+          submissions: scopedSubmissions,
+          groups: scopedGroups,
+          nextBestActions: scopedNextBestActions,
+          interventions: scopedInterventions,
+          practiceSets: scopedPracticeSets,
+          classStats: scopedClassStats,
+        });
+      } else if (reqRole === 'STUDENT' && reqStudentId) {
+        const scopedStudents = (db.students || []).filter((s) => s.id === reqStudentId);
+        const scopedSubmissions = (db.submissions || []).filter((sub: any) => sub.student_id === reqStudentId);
+        const scopedPracticeSets = (db.practiceSets || []).filter((ps: any) => ps.student_id === reqStudentId);
+        return res.json({
+          ...db,
+          students: scopedStudents,
+          submissions: scopedSubmissions,
+          practiceSets: scopedPracticeSets,
+        });
+      }
+
+      res.json(db);
+    } catch (err: any) {
+      console.error('Error fetching db state:', err);
+      res.status(500).json({ error: 'Failed to fetch database state' });
+    }
   });
 
   // GET Teacher Evaluation Settings
@@ -235,6 +333,155 @@ async function startServer() {
     }
   });
 
+  // Add New Student Endpoint (Teacher Action)
+  app.post('/api/students/add', async (req, res) => {
+    try {
+      const { name, email, grade = 'Grade 10', section = 'A', studentId, teacherId, teacher_id } = req.body;
+      if (!name || !email) {
+        return res.status(400).json({ error: 'Student name and email are required.' });
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanName = name.trim();
+      const db = await getDatabaseAsync();
+      if (!db.users) db.users = [];
+      if (!db.students) db.students = [];
+      if (!db.teacherStudents) db.teacherStudents = [];
+
+      const currentTeacherId =
+        teacherId ||
+        teacher_id ||
+        (req.headers['x-teacher-id'] as string) ||
+        (db.users.find((u) => u.role === 'TEACHER')?.id) ||
+        'usr_teacher_demo';
+
+      const supabase = getSupabaseClient();
+
+      // Check if student user already exists
+      let existingUser = db.users.find((u) => u.email && u.email.toLowerCase() === cleanEmail);
+      let stdId = existingUser?.studentId || studentId?.trim();
+
+      if (!existingUser) {
+        // Query Supabase User table to be sure
+        const { data: dbUserRow } = await supabase.from('User').select('*').eq('email', cleanEmail).maybeSingle();
+        if (dbUserRow) {
+          existingUser = dbUserRow;
+          stdId = dbUserRow.studentId || dbUserRow.id;
+          if (!db.users.some(u => u.id === dbUserRow.id)) {
+            db.users.push(dbUserRow);
+          }
+        }
+      }
+
+      if (!stdId) {
+        stdId = `std_${Date.now()}`;
+      }
+
+      let userId = existingUser ? existingUser.id : `usr_${Date.now()}`;
+
+      if (!existingUser) {
+        const newUserRow = {
+          id: userId,
+          name: cleanName,
+          email: cleanEmail,
+          passwordHash: 'student123',
+          role: 'STUDENT' as const,
+          studentId: stdId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        const { error: insertErr } = await supabase.from('User').insert(newUserRow);
+        if (insertErr) {
+          console.warn('[Supabase DB] Warning inserting student row into User table:', insertErr.message);
+        }
+
+        await supabase.auth.signUp({
+          email: cleanEmail,
+          password: 'student123',
+          options: { data: { name: cleanName, role: 'STUDENT', studentId: stdId } },
+        }).catch(() => {});
+
+        db.users.push(newUserRow);
+      }
+
+      let studentProfile = db.students.find(
+        (s: any) => s.id === stdId || (s.email && s.email.toLowerCase() === cleanEmail)
+      );
+
+      if (!studentProfile) {
+        studentProfile = {
+          id: stdId,
+          name: cleanName,
+          email: cleanEmail,
+          class: `${grade} ${section}`,
+          grade_level: grade,
+          overall_mastery: 0,
+          overallAccuracy: 0,
+          totalEvaluations: 0,
+          error_frequency: 0,
+          common_error: 'None recorded yet',
+          error_dna: [],
+          weakTopics: [],
+          strongTopics: [],
+          strengths: ['Enrolled in class'],
+          needs_improvement: [],
+          topic_mastery: [],
+          assignment_history: [],
+          learning_velocity: 'New Student',
+          digitalTwinSummary: `${cleanName} joined ${grade} Section ${section}.`,
+        } as any;
+        db.students.push(studentProfile);
+      } else {
+        (studentProfile as any).name = cleanName;
+        (studentProfile as any).email = cleanEmail;
+        (studentProfile as any).class = `${grade} ${section}`;
+        (studentProfile as any).grade_level = grade;
+      }
+
+      const finalStudentId = studentProfile.id;
+
+      // Link Teacher -> Student relationship for currentTeacherId
+      if (currentTeacherId) {
+        const relExists = db.teacherStudents.some(
+          (ts) => ts.teacherId === currentTeacherId && ts.studentId === finalStudentId
+        );
+        if (!relExists) {
+          const relId = `ts_${currentTeacherId}_${finalStudentId}`;
+          db.teacherStudents.push({
+            id: relId,
+            teacherId: currentTeacherId,
+            studentId: finalStudentId,
+            createdAt: new Date().toISOString(),
+          });
+
+          // Sync to Supabase PostgreSQL relationship tables
+          try {
+            await supabase.from('TeacherStudent').upsert({
+              id: relId,
+              teacherId: currentTeacherId,
+              studentId: finalStudentId,
+            });
+            await supabase.from('teacher_students').upsert({
+              id: relId,
+              teacher_id: currentTeacherId,
+              student_id: finalStudentId,
+            });
+          } catch (e) {}
+        }
+      }
+
+      db.classStats.totalStudents = db.students.length;
+      await saveDatabaseAsync(db);
+
+      console.log(`[Supabase DB Success] Added/linked student: ${cleanName} (${cleanEmail}) for teacher ${currentTeacherId}`);
+      res.json({ success: true, student: studentProfile });
+    } catch (err: any) {
+      console.error('Error adding student:', err);
+      res.status(500).json({ error: err.message || 'Failed to add student to database.' });
+    }
+  });
+
   // Login User via Supabase Database Table ("User")
   app.post('/api/auth/login', async (req, res) => {
     try {
@@ -312,11 +559,9 @@ async function startServer() {
 
 
   // GET Curricula list
-  app.get('/api/curricula', (req, res) => {
-    const { teacher_id = 'usr_teacher_demo' } = req.query;
-    const db = getDatabase();
-    const list = (db.curricula || []).filter((c: any) => c.teacherId === teacher_id || !c.teacherId);
-    res.json({ curricula: list });
+  app.get('/api/curricula', async (req, res) => {
+    const db = await getDatabaseAsync();
+    res.json({ curricula: db.curricula || [] });
   });
 
   // GET Syllabus details by ID
@@ -421,6 +666,91 @@ async function startServer() {
 
       await saveDatabaseAsync(db);
 
+      // Also sync to Supabase PostgreSQL database tables if available
+      try {
+        const supabase = getSupabaseClient();
+
+        // 1. Ensure teacher_id exists in User table so Foreign Key constraint does not fail
+        const { data: existingUser } = await supabase
+          .from('User')
+          .select('id')
+          .eq('id', teacher_id)
+          .maybeSingle();
+
+        if (!existingUser) {
+          try {
+            await supabase.from('User').insert({
+              id: teacher_id,
+              name: 'Teacher Account',
+              email: `${teacher_id}@grademate.edu`,
+              passwordHash: 'teacher123',
+              role: 'TEACHER',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+          } catch (e) {}
+        }
+
+        // 2. Upload raw syllabus file to Supabase Storage bucket
+        let uploadedFileUrl = '';
+        if (file_base64 || raw_text) {
+          const fileContent = file_base64
+            ? Buffer.from(file_base64, 'base64')
+            : Buffer.from(raw_text || `${name} ${board} ${subject} Syllabus`);
+          const storagePath = `syllabi/${curriculumId}_${file_name}`;
+          
+          await supabase.storage.from('grademate_data').upload(storagePath, fileContent, {
+            contentType: file_base64 ? 'application/octet-stream' : 'text/plain',
+            upsert: true,
+          }).catch(() => {});
+
+          const { data: publicUrlData } = supabase.storage.from('grademate_data').getPublicUrl(storagePath);
+          if (publicUrlData) {
+            uploadedFileUrl = publicUrlData.publicUrl;
+          }
+        }
+
+        newCurriculum.fileUrl = uploadedFileUrl || `syllabi/${curriculumId}_${file_name}`;
+
+        // 3. Upsert Curriculum into Supabase PostgreSQL Table
+        const { error: currErr } = await supabase.from('Curriculum').upsert({
+          id: curriculumId,
+          teacherId: teacher_id,
+          name,
+          board,
+          class: class_year || '10',
+          subject,
+          academicYear: academic_year || '2026',
+          fileUrl: uploadedFileUrl || `syllabi/${curriculumId}_${file_name}`,
+          fileName: file_name,
+          status: 'Analysed',
+          unitsCount: analysis.summary.unitsCount || 0,
+          topicsCount: analysis.summary.topicsCount || 0,
+          conceptsCount: analysis.summary.conceptsCount || 0,
+          rawText: raw_text || `${name} ${board} ${subject} Syllabus`,
+        });
+
+        if (currErr) {
+          console.error('[Supabase DB Error] Curriculum table insert failed:', currErr);
+        } else {
+          console.log(`[Supabase DB Success] Saved syllabus "${name}" (${curriculumId}) to Supabase Curriculum table!`);
+        }
+
+        if (createdTopics.length > 0) {
+          const { error: topErr } = await supabase.from('CurriculumTopic').upsert(createdTopics);
+          if (topErr) console.error('[Supabase DB Error] CurriculumTopic insert failed:', topErr);
+          else console.log(`[Supabase DB Success] Saved ${createdTopics.length} topics to CurriculumTopic table!`);
+        }
+
+        if (createdChunks.length > 0) {
+          const { error: chkErr } = await supabase.from('CurriculumChunk').upsert(createdChunks);
+          if (chkErr) console.error('[Supabase DB Error] CurriculumChunk insert failed:', chkErr);
+          else console.log(`[Supabase DB Success] Saved ${createdChunks.length} chunks to CurriculumChunk table!`);
+        }
+      } catch (sqlErr: any) {
+        console.warn('[Supabase DB Sync Note]:', sqlErr?.message || sqlErr);
+      }
+
       res.json({
         success: true,
         curriculum: newCurriculum,
@@ -434,76 +764,197 @@ async function startServer() {
   });
 
   // PUT Update Extracted Topic Detail
-  app.put('/api/curricula/:id/topic/:topicId', (req, res) => {
-    const db = getDatabase();
-    const { id, topicId } = req.params;
-    const { unit, topic, concept, learningObjective } = req.body;
+  app.put('/api/curricula/:id/topic/:topicId', async (req, res) => {
+    try {
+      const db = await getDatabaseAsync();
+      const { id, topicId } = req.params;
+      const { unit, topic, concept, learningObjective } = req.body;
 
-    const topicItem = (db.curriculumTopics || []).find((t: any) => t.id === topicId && t.curriculumId === id);
-    if (!topicItem) {
-      return res.status(404).json({ error: 'Topic not found' });
+      const topicItem = (db.curriculumTopics || []).find((t: any) => t.id === topicId && t.curriculumId === id);
+      if (!topicItem) {
+        return res.status(404).json({ error: 'Topic not found' });
+      }
+
+      if (unit) topicItem.unit = unit;
+      if (topic) topicItem.topic = topic;
+      if (concept) topicItem.concept = concept;
+      if (learningObjective) topicItem.learningObjective = learningObjective;
+
+      await saveDatabaseAsync(db);
+
+      res.json({ success: true, topic: topicItem });
+    } catch (err: any) {
+      console.error('Error updating topic:', err);
+      res.status(500).json({ error: 'Failed to update topic' });
     }
-
-    if (unit) topicItem.unit = unit;
-    if (topic) topicItem.topic = topic;
-    if (concept) topicItem.concept = concept;
-    if (learningObjective) topicItem.learningObjective = learningObjective;
-
-    res.json({ success: true, topic: topicItem });
   });
 
   // DELETE Curriculum
-  app.delete('/api/curricula/:id', (req, res) => {
-    const db = getDatabase();
-    const id = req.params.id;
+  app.delete('/api/curricula/:id', async (req, res) => {
+    try {
+      const db = await getDatabaseAsync();
+      const id = req.params.id;
 
-    db.curricula = db.curricula.filter((c: any) => c.id !== id);
-    db.curriculumTopics = db.curriculumTopics.filter((t: any) => t.curriculumId !== id);
-    db.curriculumChunks = db.curriculumChunks.filter((c: any) => c.curriculumId !== id);
+      // Filter out curriculum, curriculumTopics, and curriculumChunks
+      db.curricula = (db.curricula || []).filter((c: any) => c.id !== id);
+      db.curriculumTopics = (db.curriculumTopics || []).filter((t: any) => t.curriculumId !== id);
+      db.curriculumChunks = (db.curriculumChunks || []).filter((c: any) => c.curriculumId !== id);
 
-    res.json({ success: true, message: 'Curriculum deleted successfully' });
+      // Save updated database state to Supabase Cloud
+      await saveDatabaseAsync(db);
+
+      // Also delete from Supabase PostgreSQL tables if present
+      try {
+        const supabase = getSupabaseClient();
+        await supabase.from('CurriculumChunk').delete().eq('curriculumId', id);
+        await supabase.from('CurriculumTopic').delete().eq('curriculumId', id);
+        await supabase.from('Curriculum').delete().eq('id', id);
+        console.log(`[Supabase DB Success] Deleted curriculum ${id} and related knowledge base from Supabase tables!`);
+      } catch (sqlErr: any) {
+        console.warn('[Supabase DB Delete Warning]:', sqlErr?.message || sqlErr);
+      }
+
+      res.json({ success: true, message: 'Curriculum deleted successfully from database' });
+    } catch (err: any) {
+      console.error('Error deleting curriculum:', err);
+      res.status(500).json({ error: 'Failed to delete curriculum from database' });
+    }
   });
 
   // POST Create Assessment linked to Curriculum
-  app.post('/api/assessments/create', (req, res) => {
-    const {
-      title,
-      subject,
-      topic,
-      curriculum_id,
-      max_marks = 10,
-      due_date = '2026-08-30',
-      teacher_id = 'usr_teacher_demo',
-    } = req.body;
+  app.post('/api/assessments/create', async (req, res) => {
+    try {
+      const {
+        title,
+        subject,
+        topic,
+        curriculum_id,
+        max_marks = 10,
+        due_date = '2026-08-30',
+        teacher_id = 'usr_teacher_demo',
+        assigned_student_id = 'ALL',
+      } = req.body;
 
-    if (!title || !curriculum_id) {
-      return res.status(400).json({ error: 'Assessment title and mandatory curriculum_id are required.' });
+      if (!title || !curriculum_id) {
+        return res.status(400).json({ error: 'Assessment title and mandatory curriculum_id are required.' });
+      }
+
+      const db = await getDatabaseAsync();
+      const assessmentId = `as_${Date.now()}`;
+      const newAssignment = {
+        id: assessmentId,
+        teacherId: teacher_id,
+        curriculumId: curriculum_id,
+        assignedStudentId: assigned_student_id,
+        title,
+        subject: subject || 'Mathematics',
+        topic: topic || 'Linear Equations',
+        total_submissions: 0,
+        average_score: 0,
+        max_marks,
+        due_date,
+        questions: [
+          {
+            id: `q_${Date.now()}_1`,
+            question_text: 'Solve for x: 2x + 5 = 15',
+            max_marks: max_marks,
+            rubric_guidelines: 'Isolate 2x = 10 and divide by 2.',
+          },
+        ],
+      };
+
+      db.assignments.unshift(newAssignment);
+      await saveDatabaseAsync(db);
+
+      // Save to Supabase PostgreSQL Assessment Table
+      try {
+        const supabase = getSupabaseClient();
+        
+        // Ensure teacherId exists in User table
+        const { data: existingUser } = await supabase.from('User').select('id').eq('id', teacher_id).maybeSingle();
+        if (!existingUser) {
+          try {
+            await supabase.from('User').insert({
+              id: teacher_id,
+              name: 'Teacher Account',
+              email: `${teacher_id}@grademate.edu`,
+              passwordHash: 'teacher123',
+              role: 'TEACHER',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+          } catch (e) {}
+        }
+
+        const { error: asgnErr } = await supabase.from('Assessment').upsert({
+          id: assessmentId,
+          teacherId: teacher_id,
+          curriculumId: curriculum_id,
+          title,
+          subject: subject || 'Mathematics',
+          totalMarks: max_marks,
+          dueDate: new Date(due_date).toISOString(),
+          createdAt: new Date().toISOString(),
+        });
+
+        if (asgnErr) {
+          console.error('[Supabase DB Error] Assessment insert failed:', asgnErr);
+        } else {
+          console.log(`[Supabase DB Success] Saved assessment "${title}" to Assessment table!`);
+        }
+      } catch (sqlErr: any) {
+        console.warn('[Supabase DB Sync Note]:', sqlErr?.message || sqlErr);
+      }
+
+      res.json({ success: true, assignment: newAssignment });
+    } catch (err: any) {
+      console.error('Error creating assessment:', err);
+      res.status(500).json({ error: 'Failed to create assessment in database' });
     }
+  });
 
-    const db = getDatabase();
-    const newAssignment = {
-      id: `as_${Date.now()}`,
-      teacherId: teacher_id,
-      curriculumId: curriculum_id,
-      title,
-      subject: subject || 'Mathematics',
-      topic: topic || 'Linear Equations',
-      total_submissions: 0,
-      average_score: 0,
-      max_marks,
-      due_date,
-      questions: [
-        {
-          id: `q_${Date.now()}_1`,
-          question_text: 'Solve for x: 2x + 5 = 15',
-          max_marks: max_marks,
-          rubric_guidelines: 'Isolate 2x = 10 and divide by 2.',
-        },
-      ],
-    };
+  // DELETE Assessment / Assignment
+  app.delete('/api/assessments/:id', async (req, res) => {
+    try {
+      const db = await getDatabaseAsync();
+      const id = req.params.id;
 
-    db.assignments.unshift(newAssignment);
-    res.json({ success: true, assignment: newAssignment });
+      // Filter out assessment from db.assignments
+      db.assignments = (db.assignments || []).filter((a: any) => a.id !== id);
+
+      // Save updated database state to Supabase Cloud
+      await saveDatabaseAsync(db);
+
+      // Also delete from Supabase PostgreSQL Assessment table if present
+      try {
+        const supabase = getSupabaseClient();
+        await supabase.from('Assessment').delete().eq('id', id);
+        console.log(`[Supabase DB Success] Deleted assessment ${id} from Supabase table!`);
+      } catch (sqlErr: any) {
+        console.warn('[Supabase DB Delete Warning]:', sqlErr?.message || sqlErr);
+      }
+
+      res.json({ success: true, message: 'Assessment deleted successfully from database' });
+    } catch (err: any) {
+      console.error('Error deleting assessment:', err);
+      res.status(500).json({ error: 'Failed to delete assessment from database' });
+    }
+  });
+
+  app.delete('/api/assignments/:id', async (req, res) => {
+    try {
+      const db = await getDatabaseAsync();
+      const id = req.params.id;
+      db.assignments = (db.assignments || []).filter((a: any) => a.id !== id);
+      await saveDatabaseAsync(db);
+      try {
+        const supabase = getSupabaseClient();
+        await supabase.from('Assessment').delete().eq('id', id);
+      } catch (sqlErr: any) {}
+      res.json({ success: true, message: 'Assignment deleted successfully' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to delete assignment' });
+    }
   });
 
   // Analyze Handwritten Answer
@@ -617,17 +1068,40 @@ async function startServer() {
       // Add to database submissions
       db.submissions.unshift(newSubmission);
 
-      // Update student profile history
+      // Update student profile history & recalculate mastery
       const student = db.students.find((s) => s.id === student_id);
       if (student) {
         student.assignment_history.unshift({
-          assignment_id: 'asg_1',
-          assignment_title: 'Handwritten Math Evaluation',
+          assignment_id: `asg_${Date.now()}`,
+          assignment_title: `Evaluation: ${topic}`,
           score: newSubmission.score,
           max_score: newSubmission.max_score,
           date: new Date().toISOString().split('T')[0],
         });
+
+        // Recalculate student mastery & error dna
+        const subScorePct = Math.round((newSubmission.score / newSubmission.max_score) * 100);
+        student.overall_mastery = Math.round((student.overall_mastery * 0.7) + (subScorePct * 0.3));
+
+        if (newSubmission.errors && newSubmission.errors.length > 0) {
+          student.error_frequency += 1;
+          const topErr = newSubmission.errors[0];
+          student.common_error = typeof topErr === 'string' ? topErr : topErr.error_type || student.common_error;
+          if (!student.needs_improvement.includes(student.common_error)) {
+            student.needs_improvement.unshift(student.common_error);
+          }
+        }
       }
+
+      // Recalculate class stats
+      if (db.submissions.length > 0) {
+        const totalScorePct = db.submissions.reduce((acc: number, curr: any) => acc + (curr.score / curr.max_score) * 100, 0);
+        db.classStats.averageClassScore = Math.round(totalScorePct / db.submissions.length);
+        db.classStats.totalAssignments = db.submissions.length;
+      }
+
+      // Persist state to Supabase Cloud
+      await saveDatabaseAsync(db);
 
       res.json({
         success: true,
@@ -640,27 +1114,42 @@ async function startServer() {
   });
 
   // Override AI Grade (Teacher Human-In-The-Loop)
-  app.post('/api/submissions/override', (req, res) => {
-    const { submission_id, new_score, teacher_comment } = req.body;
-    const db = getDatabase();
-    const sub = db.submissions.find((s) => s.id === submission_id);
-    if (!sub) {
-      return res.status(404).json({ error: 'Submission not found' });
+  app.post('/api/submissions/override', async (req, res) => {
+    try {
+      const { submission_id, new_score, teacher_comment } = req.body;
+      const db = await getDatabaseAsync();
+      const sub = db.submissions.find((s) => s.id === submission_id);
+      if (!sub) {
+        return res.status(404).json({ error: 'Submission not found' });
+      }
+
+      sub.teacher_overridden = true;
+      sub.teacher_score_override = new_score;
+      sub.score = new_score;
+      sub.teacher_comment = teacher_comment;
+
+      // Update student profile history
+      const student = db.students.find((s) => s.id === sub.student_id);
+      if (student) {
+        const historyItem = student.assignment_history.find((h) => h.assignment_id === sub.id);
+        if (historyItem) {
+          historyItem.score = new_score;
+        }
+      }
+
+      await saveDatabaseAsync(db);
+      res.json({ success: true, submission: sub });
+    } catch (err: any) {
+      console.error('Error in override grade:', err);
+      res.status(500).json({ error: 'Failed to override grade' });
     }
-
-    sub.teacher_overridden = true;
-    sub.teacher_score_override = new_score;
-    sub.score = new_score;
-    sub.teacher_comment = teacher_comment;
-
-    res.json({ success: true, submission: sub });
   });
 
   // Generate Targeted Practice
   app.post('/api/practice/generate', async (req, res) => {
     try {
       const { student_id = 'std_1', concept = 'Sign Handling in Algebra', error_type = 'Sign Error' } = req.body;
-      const db = getDatabase();
+      const db = await getDatabaseAsync();
       const student = db.students.find((s) => s.id === student_id) || db.students[0];
 
       const questions = await generateTargetedPracticeAI(student.name, concept, error_type);
@@ -682,6 +1171,7 @@ async function startServer() {
       };
 
       db.practiceSets.unshift(newPracticeSet);
+      await saveDatabaseAsync(db);
 
       res.json({ success: true, practiceSet: newPracticeSet });
     } catch (err: any) {
@@ -690,61 +1180,77 @@ async function startServer() {
   });
 
   // Submit Practice Answers & Reassess
-  app.post('/api/practice/submit', (req, res) => {
-    const { practice_set_id, student_answers } = req.body;
-    const db = getDatabase();
-    const practiceSet = db.practiceSets.find((p) => p.id === practice_set_id);
+  app.post('/api/practice/submit', async (req, res) => {
+    try {
+      const { practice_set_id, student_answers } = req.body;
+      const db = await getDatabaseAsync();
+      const practiceSet = db.practiceSets.find((p) => p.id === practice_set_id);
 
-    if (!practiceSet) {
-      return res.status(404).json({ error: 'Practice set not found' });
+      if (!practiceSet) {
+        return res.status(404).json({ error: 'Practice set not found' });
+      }
+
+      let correctCount = 0;
+      practiceSet.questions.forEach((q) => {
+        const ans = student_answers[q.id] || '';
+        q.student_answer = ans;
+        const isCorrect =
+          ans.trim().toLowerCase() === q.expected_final_answer.trim().toLowerCase() ||
+          ans.includes(q.expected_final_answer.trim());
+        q.is_correct = isCorrect;
+        if (isCorrect) correctCount++;
+      });
+
+      const afterAccuracy = Math.round((correctCount / practiceSet.questions.length) * 100);
+      const beforeAccuracy = practiceSet.before_accuracy || 48;
+      const delta = afterAccuracy - beforeAccuracy;
+
+      practiceSet.status = 'Completed';
+      practiceSet.after_accuracy = afterAccuracy;
+      practiceSet.improvement_delta = delta;
+      practiceSet.completed_at = new Date().toISOString();
+
+      // Update intervention record & student mastery
+      const student = db.students.find((s) => s.id === practiceSet.student_id);
+      if (student) {
+        student.overall_mastery = Math.min(100, Math.max(0, student.overall_mastery + Math.round(delta * 0.3)));
+        if (delta > 20) {
+          student.strengths.unshift(`Mastered ${practiceSet.target_concept}`);
+        }
+      }
+
+      db.interventions.unshift({
+        id: `int_${Date.now()}`,
+        student_id: practiceSet.student_id,
+        student_name: practiceSet.student_name,
+        concept: practiceSet.target_concept,
+        error_type: practiceSet.target_error_type,
+        date_assigned: new Date().toISOString().split('T')[0],
+        before_score: beforeAccuracy,
+        after_score: afterAccuracy,
+        status: delta > 20 ? 'SUCCESSFUL' : 'NEEDS FURTHER SUPPORT',
+        notes: `Targeted practice completed (${correctCount}/${practiceSet.questions.length} correct). Improvement: +${delta}%.`,
+      });
+
+      // Recalculate intervention success rate
+      if (db.interventions.length > 0) {
+        const successCount = db.interventions.filter((i) => i.status === 'SUCCESSFUL').length;
+        db.classStats.interventionSuccessRate = Math.round((successCount / db.interventions.length) * 100);
+      }
+
+      await saveDatabaseAsync(db);
+
+      res.json({
+        success: true,
+        practiceSet,
+        beforeAccuracy,
+        afterAccuracy,
+        improvementDelta: delta,
+      });
+    } catch (err: any) {
+      console.error('Error submitting practice answers:', err);
+      res.status(500).json({ error: 'Failed to submit practice answers' });
     }
-
-    let correctCount = 0;
-    practiceSet.questions.forEach((q) => {
-      const ans = student_answers[q.id] || '';
-      q.student_answer = ans;
-      const isCorrect =
-        ans.trim().toLowerCase() === q.expected_final_answer.trim().toLowerCase() ||
-        ans.includes(q.expected_final_answer.trim());
-      q.is_correct = isCorrect;
-      if (isCorrect) correctCount++;
-    });
-
-    const afterAccuracy = Math.round((correctCount / practiceSet.questions.length) * 100);
-    const beforeAccuracy = practiceSet.before_accuracy || 48;
-    const delta = afterAccuracy - beforeAccuracy;
-
-    practiceSet.status = 'Completed';
-    practiceSet.after_accuracy = afterAccuracy;
-    practiceSet.improvement_delta = delta;
-    practiceSet.completed_at = new Date().toISOString();
-
-    // Update intervention record
-    const student = db.students.find((s) => s.id === practiceSet.student_id);
-    if (student) {
-      student.overall_mastery = Math.min(100, student.overall_mastery + Math.round(delta * 0.3));
-    }
-
-    db.interventions.unshift({
-      id: `int_${Date.now()}`,
-      student_id: practiceSet.student_id,
-      student_name: practiceSet.student_name,
-      concept: practiceSet.target_concept,
-      error_type: practiceSet.target_error_type,
-      date_assigned: new Date().toISOString().split('T')[0],
-      before_score: beforeAccuracy,
-      after_score: afterAccuracy,
-      status: delta > 20 ? 'SUCCESSFUL' : 'NEEDS FURTHER SUPPORT',
-      notes: `Targeted practice completed (${correctCount}/${practiceSet.questions.length} correct). Improvement: +${delta}%.`,
-    });
-
-    res.json({
-      success: true,
-      practiceSet,
-      beforeAccuracy,
-      afterAccuracy,
-      improvementDelta: delta,
-    });
   });
 
   // What-If Teaching Simulator

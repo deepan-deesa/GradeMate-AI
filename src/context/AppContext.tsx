@@ -57,7 +57,8 @@ interface AppContextType {
   }) => Promise<Curriculum>;
   deleteSyllabus: (id: string) => Promise<void>;
   updateCurriculumTopic: (curriculumId: string, topicId: string, data: Partial<CurriculumTopic>) => Promise<void>;
-  createAssessment: (payload: { title: string; subject: string; topic: string; curriculum_id: string; max_marks?: number; due_date?: string }) => Promise<any>;
+  createAssessment: (payload: { title: string; subject: string; topic: string; curriculum_id: string; max_marks?: number; due_date?: string; assigned_student_id?: string }) => Promise<any>;
+  deleteAssessment: (id: string) => Promise<void>;
   analyzeHandwriting: (payload: {
     image_base64?: string;
     question: string;
@@ -85,10 +86,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const stored = localStorage.getItem('assessly_user_session');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.id === 'usr_teacher_demo' || parsed.email?.includes('assessly.edu') || parsed.email?.includes('grademate.edu')) {
-          localStorage.removeItem('assessly_user_session');
-          return null;
-        }
         return parsed;
       }
       return null;
@@ -181,27 +178,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const logout = () => {
     setUserSession(null);
     localStorage.removeItem('assessly_user_session');
+    setDbState(null);
     setActiveView('login');
     addToast('Logged out successfully', 'info');
   };
 
   const setRole = (newRole: Role) => {
-    if (userSession && userSession.role === 'STUDENT' && newRole === 'TEACHER') {
-      addToast('Student accounts are restricted to Student Portal access.', 'error');
+    if (userSession && userSession.role !== newRole) {
+      logout();
+      addToast(`Logged out. Please sign in with an authorized ${newRole === 'TEACHER' ? 'Teacher' : 'Student'} account.`, 'info');
       return;
     }
     setRoleState(newRole);
-    if (userSession) {
-      const updatedSession = { ...userSession, role: newRole };
-      setUserSession(updatedSession);
-      localStorage.setItem('assessly_user_session', JSON.stringify(updatedSession));
-    }
     if (newRole === 'STUDENT') {
       setActiveView('student_dashboard');
     } else {
       setActiveView('dashboard');
     }
-    addToast(`Switched view to ${newRole === 'TEACHER' ? 'Teacher Portal' : 'Student Portal'}`, 'info');
   };
 
   const [dbState, setDbState] = useState<any | null>(null);
@@ -236,7 +229,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshState = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/db/state');
+      const queryParams = new URLSearchParams();
+      if (userSession?.id) {
+        queryParams.append('teacherId', userSession.id);
+        queryParams.append('role', userSession.role);
+        if (userSession.studentId) queryParams.append('studentId', userSession.studentId);
+      }
+      const res = await fetch(`/api/db/state?${queryParams.toString()}`, {
+        headers: {
+          'x-teacher-id': userSession?.id || '',
+          'x-user-role': userSession?.role || '',
+          'x-student-id': userSession?.studentId || '',
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         setDbState(data);
@@ -244,13 +249,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (data.evaluationSettings) {
           setEvaluationSettings(data.evaluationSettings);
         }
-        if (data.submissions && data.submissions.length > 0 && !selectedSubmission) {
+        if (data.submissions && data.submissions.length > 0) {
           setSelectedSubmission(data.submissions[0]);
+        } else {
+          setSelectedSubmission(null);
         }
-        if (data.practiceSets && data.practiceSets.length > 0 && !activePracticeSet) {
+        if (data.practiceSets && data.practiceSets.length > 0) {
           setActivePracticeSet(data.practiceSets[0]);
+        } else {
+          setActivePracticeSet(null);
         }
-        if (data.curricula && data.curricula.length > 0 && !selectedCurriculumId) {
+        if (data.curricula && data.curricula.length > 0) {
           setSelectedCurriculumId(data.curricula[0].id);
         }
       }
@@ -264,7 +273,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     refreshState();
-  }, []);
+  }, [userSession]);
 
   const uploadSyllabus = async (payload: {
     name: string;
@@ -330,8 +339,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const res = await fetch(`/api/curricula/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        addToast('Syllabus and knowledge base deleted successfully', 'success');
+        addToast('Syllabus and knowledge base deleted from database', 'success');
+        if (selectedCurriculumId === id) {
+          const remaining = curricula.filter((c) => c.id !== id);
+          setSelectedCurriculumId(remaining.length > 0 ? remaining[0].id : '');
+        }
         await refreshState();
+      } else {
+        addToast('Failed to delete syllabus from database', 'error');
       }
     } catch (e) {
       addToast('Failed to delete syllabus', 'error');
@@ -361,6 +376,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     curriculum_id: string;
     max_marks?: number;
     due_date?: string;
+    assigned_student_id?: string;
   }) => {
     try {
       const res = await fetch('/api/assessments/create', {
@@ -379,6 +395,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e: any) {
       addToast(e.message || 'Failed to create assessment', 'error');
       throw e;
+    }
+  };
+
+  const deleteAssessment = async (id: string) => {
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/assessments/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        addToast('Assessment permanently removed from database.', 'success');
+        await refreshState();
+      } else {
+        const data = await res.json();
+        addToast(data.error || 'Failed to delete assessment', 'error');
+      }
+    } catch (err: any) {
+      console.error('Error deleting assessment:', err);
+      addToast('Failed to delete assessment from database', 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -575,6 +612,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteSyllabus,
         updateCurriculumTopic,
         createAssessment,
+        deleteAssessment,
         analyzeHandwriting,
         overrideGrade,
         generateTargetedPractice,

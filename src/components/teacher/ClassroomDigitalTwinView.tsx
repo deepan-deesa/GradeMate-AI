@@ -23,7 +23,12 @@ export const ClassroomDigitalTwinView: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {students.length === 0 ? (
+        <div className="p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center text-slate-400 font-medium">
+          No active students found in your class. Add students from the Teacher Dashboard to generate digital twin models.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {students.map((student: any) => (
           <div
             key={student.id}
@@ -60,6 +65,7 @@ export const ClassroomDigitalTwinView: React.FC = () => {
           </div>
         ))}
       </div>
+      )}
     </div>
   );
 };

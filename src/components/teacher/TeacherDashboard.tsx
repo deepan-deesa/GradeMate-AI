@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { 
   Users, 
+  UserPlus,
   BookOpen, 
   TrendingUp, 
   AlertTriangle, 
@@ -18,45 +19,137 @@ import {
 } from 'recharts';
 
 export const TeacherDashboard: React.FC = () => {
-  const { dbState, setActiveView, setSelectedStudentId } = useApp();
+  const { userSession, dbState, setActiveView, setSelectedStudentId, addToast, refreshState } = useApp();
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [newStudentName, setNewStudentName] = useState('');
+  const [newStudentEmail, setNewStudentEmail] = useState('');
+  const [newStudentGrade, setNewStudentGrade] = useState('Grade 10');
+  const [newStudentSection, setNewStudentSection] = useState('A');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const stats = dbState?.classStats || {
-    totalStudents: 42,
-    totalAssignments: 128,
-    averageClassScore: 76,
-    commonLearningGap: 'Sign Errors & Integer Operations',
-    studentsNeedingSupport: 8,
-    interventionSuccessRate: 84,
+  const students = dbState?.students || [];
+  const submissions = dbState?.submissions || [];
+  const assignments = dbState?.assignments || [];
+
+  // Dynamic Class Stats
+  const totalStudents = students.length;
+  const totalAssignmentsCount = assignments.length + submissions.length;
+  const averageClassScore = submissions.length > 0
+    ? Math.round(submissions.reduce((acc: number, s: any) => acc + ((s.score || 0) / (s.max_score || 10)) * 100, 0) / submissions.length)
+    : 0;
+  
+  // Find common learning gap
+  const gapCounts: Record<string, number> = {};
+  submissions.forEach((s: any) => {
+    if (s.errors) {
+      s.errors.forEach((err: any) => {
+        const typeStr = typeof err === 'string' ? err : err.error_type || 'General Error';
+        gapCounts[typeStr] = (gapCounts[typeStr] || 0) + 1;
+      });
+    }
+  });
+  let commonLearningGap = 'No errors logged';
+  let maxGapCount = 0;
+  Object.keys(gapCounts).forEach((gap) => {
+    if (gapCounts[gap] > maxGapCount) {
+      maxGapCount = gapCounts[gap];
+      commonLearningGap = gap;
+    }
+  });
+
+  const studentsNeedingSupport = students.filter(
+    (s: any) => (s.overall_mastery ?? s.overallAccuracy ?? 100) < 65
+  ).length;
+
+  const stats = {
+    totalStudents,
+    totalAssignments: totalAssignmentsCount,
+    averageClassScore,
+    commonLearningGap,
+    studentsNeedingSupport,
+    interventionSuccessRate: dbState?.classStats?.interventionSuccessRate || (submissions.length > 0 ? 80 : 0),
   };
 
-  // Chart Data
-  const performanceTrend = [
-    { week: 'W1', score: 62, target: 75 },
-    { week: 'W2', score: 68, target: 75 },
-    { week: 'W3', score: 71, target: 75 },
-    { week: 'W4', score: 76, target: 75 },
-    { week: 'W5', score: 81, target: 75 },
-  ];
+  // Dynamic Class Performance Trend from Real Submissions
+  const performanceTrend = submissions.map((sub: any, idx: number) => ({
+    week: `Eval #${idx + 1}`,
+    score: Math.round(((sub.score || 0) / (sub.max_score || 10)) * 100),
+    target: 75,
+    title: sub.assignment_title || `Submission ${idx + 1}`,
+  }));
 
-  const errorDistributionData = [
-    { name: 'Sign Errors', value: 32, color: '#C85A54' },
-    { name: 'Arithmetic Errors', value: 21, color: '#C88A58' },
-    { name: 'Fraction Errors', value: 17, color: '#A36B88' },
-    { name: 'Conceptual Errors', value: 15, color: '#5B7065' },
-    { name: 'Missing Steps', value: 9, color: '#2D4A3E' },
-    { name: 'Other Slips', value: 6, color: '#888B83' },
-  ];
+  // Dynamic Error Distribution Data
+  const errorCounts: Record<string, number> = {
+    'Sign Errors': 0,
+    'Arithmetic Errors': 0,
+    'Fraction Errors': 0,
+    'Conceptual Errors': 0,
+    'Missing Steps': 0,
+    'Other Slips': 0,
+  };
+  let totalErrorsCount = 0;
+  submissions.forEach((sub: any) => {
+    if (sub.errors && sub.errors.length > 0) {
+      sub.errors.forEach((err: any) => {
+        const typeStr = typeof err === 'string' ? err : err.error_type || '';
+        if (typeStr.includes('Sign')) errorCounts['Sign Errors']++;
+        else if (typeStr.includes('Arithmetic') || typeStr.includes('Calculation')) errorCounts['Arithmetic Errors']++;
+        else if (typeStr.includes('Fraction')) errorCounts['Fraction Errors']++;
+        else if (typeStr.includes('Conceptual')) errorCounts['Conceptual Errors']++;
+        else if (typeStr.includes('Step')) errorCounts['Missing Steps']++;
+        else errorCounts['Other Slips']++;
+        totalErrorsCount++;
+      });
+    }
+  });
 
-  const topicMasteryData = [
-    { topic: 'Linear Equations', mastery: 86 },
-    { topic: 'Transposition', mastery: 68 },
-    { topic: 'Fractions', mastery: 58 },
-    { topic: 'Quadratics', mastery: 52 },
-  ];
+  const errorColors = ['#C85A54', '#C88A58', '#A36B88', '#5B7065', '#2D4A3E', '#888B83'];
+  const errorDistributionData = Object.keys(errorCounts)
+    .map((key, idx) => ({
+      name: key,
+      value: totalErrorsCount > 0 ? Math.round((errorCounts[key] / totalErrorsCount) * 100) : 0,
+      color: errorColors[idx],
+    }))
+    .filter((item) => totalErrorsCount === 0 || item.value > 0);
 
   const nextActions = dbState?.nextBestActions || [];
   const groups = dbState?.groups || [];
-  const students = dbState?.students || [];
+
+  const handleAddStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStudentName || !newStudentEmail) {
+      addToast('Name and email are required', 'error');
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      const res = await fetch('/api/students/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newStudentName,
+          email: newStudentEmail,
+          grade: newStudentGrade,
+          section: newStudentSection,
+          teacherId: userSession?.id,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast(`Successfully added student ${newStudentName}!`, 'success');
+        setShowAddStudentModal(false);
+        setNewStudentName('');
+        setNewStudentEmail('');
+        await refreshState();
+      } else {
+        addToast(data.error || 'Failed to add student', 'error');
+      }
+    } catch (err: any) {
+      addToast('Error creating student account', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-8 bg-[#FDFCF8] min-h-screen text-[#222521] font-sans">
@@ -76,18 +169,25 @@ export const TeacherDashboard: React.FC = () => {
 
         <div className="flex items-center space-x-3">
           <button
+            onClick={() => setShowAddStudentModal(true)}
+            className="px-4 py-2.5 bg-[#3A5A40] hover:bg-[#2D4A3E] text-[#FDFCF8] rounded-xl text-xs font-bold shadow-sm flex items-center space-x-2 transition-all"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add Student</span>
+          </button>
+          <button
             onClick={() => setActiveView('upload')}
             className="px-4 py-2.5 bg-[#2D4A3E] hover:bg-[#23382F] text-[#FDFCF8] rounded-xl text-xs font-bold shadow-sm flex items-center space-x-2 transition-all"
           >
             <Upload className="w-4 h-4" />
-            <span>Evaluate Handwritten Answer</span>
+            <span>Evaluate Answer Sheet</span>
           </button>
           <button
             onClick={() => setActiveView('simulator')}
             className="px-4 py-2.5 bg-[#F4F2EC] hover:bg-[#EAE7DF] text-[#222521] border border-[#D5D1C5] rounded-xl text-xs font-bold flex items-center space-x-2 transition-all"
           >
             <BrainCircuit className="w-4 h-4 text-[#8C521F]" />
-            <span>What-If Simulator</span>
+            <span>Simulator</span>
           </button>
         </div>
       </div>
@@ -98,7 +198,7 @@ export const TeacherDashboard: React.FC = () => {
           { label: 'Total Students', val: stats.totalStudents, icon: Users, color: 'text-[#2D4A3E]' },
           { label: 'Assignments', val: stats.totalAssignments, icon: BookOpen, color: 'text-[#3A5A40]' },
           { label: 'Avg Class Score', val: `${stats.averageClassScore}%`, icon: TrendingUp, color: 'text-[#2D4A3E]' },
-          { label: 'Common Gap', val: 'Sign Errors', icon: AlertTriangle, color: 'text-[#C85A54]', isText: true },
+          { label: 'Common Gap', val: stats.commonLearningGap, icon: AlertTriangle, color: 'text-[#C85A54]', isText: true },
           { label: 'Need Support', val: `${stats.studentsNeedingSupport} Students`, icon: Users, color: 'text-[#C88A58]', isText: true },
           { label: 'Intervention Success', val: `${stats.interventionSuccessRate}%`, icon: CheckCircle2, color: 'text-[#3A5A40]' },
         ].map((card, idx) => {
@@ -109,7 +209,7 @@ export const TeacherDashboard: React.FC = () => {
                 <span className="text-xs font-semibold text-[#6E7269]">{card.label}</span>
                 <Icon className={`w-4 h-4 ${card.color}`} />
               </div>
-              <div className={`font-extrabold ${card.isText ? 'text-base text-[#222521]' : 'text-2xl text-[#222521]'}`}>
+              <div className={`font-extrabold ${card.isText ? 'text-sm text-[#222521] truncate' : 'text-2xl text-[#222521]'}`}>
                 {card.val}
               </div>
             </div>
@@ -124,26 +224,37 @@ export const TeacherDashboard: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="font-bold text-[#222521] text-base">Class Performance Trend</h3>
-              <p className="text-xs text-[#545850] font-medium">Weekly average assessment scores vs mastery benchmark</p>
+              <p className="text-xs text-[#545850] font-medium">Evaluation average scores vs benchmark</p>
             </div>
-            <span className="text-xs text-[#1E3A2B] font-bold bg-[#EAF0E8] px-3 py-1 rounded-full border border-[#C2D4C1]">
-              +19% Growth over 5 weeks
-            </span>
+            {performanceTrend.length > 0 && (
+              <span className="text-xs text-[#1E3A2B] font-bold bg-[#EAF0E8] px-3 py-1 rounded-full border border-[#C2D4C1]">
+                {performanceTrend.length} Evaluations Recorded
+              </span>
+            )}
           </div>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={performanceTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E0DED7" />
-                <XAxis dataKey="week" stroke="#6E7269" fontSize={12} />
-                <YAxis domain={[40, 100]} stroke="#6E7269" fontSize={12} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E0DED7', color: '#222521', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}
-                />
-                <Line type="monotone" dataKey="score" stroke="#2D4A3E" strokeWidth={3} dot={{ r: 5, fill: '#2D4A3E' }} name="Avg Score %" />
-                <Line type="monotone" dataKey="target" stroke="#C88A58" strokeWidth={2} strokeDasharray="5 5" name="Benchmark %" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          
+          {performanceTrend.length > 0 ? (
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={performanceTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E0DED7" />
+                  <XAxis dataKey="week" stroke="#6E7269" fontSize={12} />
+                  <YAxis domain={[0, 100]} stroke="#6E7269" fontSize={12} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E0DED7', color: '#222521', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}
+                  />
+                  <Line type="monotone" dataKey="score" stroke="#2D4A3E" strokeWidth={3} dot={{ r: 5, fill: '#2D4A3E' }} name="Avg Score %" />
+                  <Line type="monotone" dataKey="target" stroke="#C88A58" strokeWidth={2} strokeDasharray="5 5" name="Benchmark %" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="p-12 text-center text-[#6E7269] text-xs space-y-2 border border-dashed border-[#E0DED7] rounded-2xl">
+              <TrendingUp className="w-8 h-8 mx-auto text-[#A3B19B]" />
+              <p className="font-bold text-[#222521]">No assessment data available yet</p>
+              <p className="text-[11px] text-[#545850]">Evaluate handwritten answer sheets to generate dynamic class performance trends.</p>
+            </div>
+          )}
         </div>
 
         {/* Chart 2: Class Error Distribution */}
@@ -157,28 +268,35 @@ export const TeacherDashboard: React.FC = () => {
             </div>
             <p className="text-xs text-[#545850] mb-4 font-medium">Dynamically classified learning gap errors</p>
 
-            <div className="h-48 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={errorDistributionData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={75}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {errorDistributionData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E0DED7', color: '#222521', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+            {errorDistributionData.length > 0 ? (
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={errorDistributionData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={75}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {errorDistributionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E0DED7', color: '#222521', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-[#6E7269] text-xs space-y-1 border border-dashed border-[#E0DED7] rounded-2xl">
+                <p className="font-bold text-[#222521]">No error data logged</p>
+                <p className="text-[11px] text-[#545850]">Evaluated student errors will populate here.</p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2 mt-2 pt-3 border-t border-[#E0DED7] text-xs">
@@ -310,42 +428,141 @@ export const TeacherDashboard: React.FC = () => {
             <p className="text-xs text-[#545850] mb-4 font-medium">Click student to inspect learning profile</p>
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {students.slice(0, 5).map((student) => (
-                <div
-                  key={student.id}
-                  onClick={() => {
-                    setSelectedStudentId(student.id);
-                    setActiveView('student_profile');
-                  }}
-                  className="p-3 rounded-xl bg-[#F4F2EC] border border-[#E0DED7] hover:border-[#2D4A3E] cursor-pointer transition-all flex items-center justify-between"
-                >
-                  <div className="flex items-center space-x-3">
-                    <img src={student.avatar} alt={student.name} className="w-8 h-8 rounded-full object-cover border border-[#E0DED7]" />
-                    <div>
-                      <div className="text-xs font-bold text-[#222521]">{student.name}</div>
-                      <div className="text-[10px] text-[#6E7269]">{student.common_error}</div>
+              {students.length === 0 ? (
+                <div className="p-4 rounded-2xl bg-[#F4F2EC] border border-[#E0DED7] text-center space-y-2">
+                  <p className="text-xs text-[#545850] font-medium">No students enrolled in your class yet.</p>
+                  <button
+                    onClick={() => setShowAddStudentModal(true)}
+                    className="inline-flex items-center px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#2D4A3E] text-white hover:bg-[#1f342b] transition-colors"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 mr-1" /> Add Your First Student
+                  </button>
+                </div>
+              ) : (
+                students.slice(0, 5).map((student) => (
+                  <div
+                    key={student.id}
+                    onClick={() => {
+                      setSelectedStudentId(student.id);
+                      setActiveView('student_profile');
+                    }}
+                    className="p-3 rounded-xl bg-[#F4F2EC] border border-[#E0DED7] hover:border-[#2D4A3E] cursor-pointer transition-all flex items-center justify-between"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <img src={student.avatar} alt={student.name} className="w-8 h-8 rounded-full object-cover border border-[#E0DED7]" />
+                      <div>
+                        <div className="text-xs font-bold text-[#222521]">{student.name}</div>
+                        <div className="text-[10px] text-[#6E7269]">{student.common_error}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-extrabold text-[#2D4A3E]">{student.overall_mastery}%</div>
+                      <div className="text-[10px] text-[#6E7269]">Mastery</div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs font-extrabold text-[#2D4A3E]">{student.overall_mastery}%</div>
-                    <div className="text-[10px] text-[#6E7269]">Mastery</div>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              setSelectedStudentId(students[0]?.id || 'std_1');
-              setActiveView('student_profile');
-            }}
-            className="w-full mt-4 py-2.5 bg-[#F4F2EC] hover:bg-[#EAE7DF] text-[#222521] text-xs font-bold rounded-xl border border-[#D5D1C5] transition-colors"
-          >
-            Open Full Student Profile
-          </button>
+          <div className="space-y-2 mt-4">
+            <button
+              onClick={() => {
+                setSelectedStudentId(students[0]?.id || 'std_1');
+                setActiveView('student_profile');
+              }}
+              className="w-full py-2.5 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center justify-center space-x-1.5"
+            >
+              <span>Inspect Student Analytics Profile</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* ADD STUDENT MODAL */}
+      {showAddStudentModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E0DED7] shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E0DED7] pb-3">
+              <h2 className="text-lg font-bold text-[#222521] flex items-center space-x-2">
+                <UserPlus className="w-5 h-5 text-[#2D4A3E]" />
+                <span>Add Student to Class</span>
+              </h2>
+              <button
+                onClick={() => setShowAddStudentModal(false)}
+                className="text-[#6E7269] hover:text-[#222521] text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleAddStudent} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#545850] mb-1">Student Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Rahul Sharma"
+                  value={newStudentName}
+                  onChange={(e) => setNewStudentName(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#545850] mb-1">Student Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. rahul@grademate.edu"
+                  value={newStudentEmail}
+                  onChange={(e) => setNewStudentEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#545850] mb-1">Grade / Class</label>
+                  <input
+                    type="text"
+                    value={newStudentGrade}
+                    onChange={(e) => setNewStudentGrade(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#545850] mb-1">Section</label>
+                  <input
+                    type="text"
+                    value={newStudentSection}
+                    onChange={(e) => setNewStudentSection(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddStudentModal(false)}
+                  className="px-4 py-2 text-xs font-medium text-[#6E7269] hover:text-[#222521]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white rounded-xl text-xs font-bold shadow-sm disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Adding...' : 'Add Student'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

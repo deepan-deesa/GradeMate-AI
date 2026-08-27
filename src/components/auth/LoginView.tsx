@@ -86,9 +86,15 @@ export const LoginView: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setErrorMessage(data.error || 'Failed to send OTP.');
+      let data: any = null;
+      try {
+        const text = await res.text();
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+      if (!res.ok || !data || !data.success) {
+        setErrorMessage(data?.error || 'Failed to send OTP. Please check your email/ID.');
         return;
       }
       setOtpStep('verify');
@@ -132,9 +138,15 @@ export const LoginView: React.FC = () => {
           confirmPassword,
         }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setErrorMessage(data.error || 'Failed to reset password.');
+      let data: any = null;
+      try {
+        const text = await res.text();
+        data = JSON.parse(text);
+      } catch {
+        data = null;
+      }
+      if (!res.ok || !data || !data.success) {
+        setErrorMessage(data?.error || 'Failed to reset password. Please check your OTP.');
         return;
       }
 

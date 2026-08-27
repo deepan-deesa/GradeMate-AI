@@ -45,6 +45,8 @@ export interface AppDatabase {
   nextBestActions: NextBestAction[];
   interventions: InterventionRecord[];
   practiceSets: PracticeSet[];
+  invitations?: any[];
+  otpRequests?: any[];
   classStats: {
     totalStudents: number;
     totalAssignments: number;

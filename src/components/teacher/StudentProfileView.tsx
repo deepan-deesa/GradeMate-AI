@@ -18,7 +18,7 @@ export const StudentProfileView: React.FC = () => {
     );
   }
 
-  const student = students.find((s: any) => s.id === selectedStudentId) || (selectedStudentId ? null : students[0]);
+  const student = students.find((s: any) => s.id === selectedStudentId) || students[0];
 
   if (!student) {
     return (
@@ -47,6 +47,28 @@ export const StudentProfileView: React.FC = () => {
     }
   };
 
+  const handleResendInvite = async () => {
+    try {
+      const res = await fetch('/api/invitations/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: student.email,
+          studentId: student.id,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.inviteUrl) {
+        navigator.clipboard.writeText(data.inviteUrl);
+        addToast(`Invitation link copied to clipboard & sent to ${student.email || student.name}!`, 'success');
+      } else {
+        addToast('Failed to generate invitation link', 'error');
+      }
+    } catch (e) {
+      addToast('Error generating invitation link', 'error');
+    }
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6 bg-slate-950 min-h-screen text-slate-100 font-sans">
       {/* Student Selector Header */}
@@ -59,14 +81,29 @@ export const StudentProfileView: React.FC = () => {
               <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold">
                 {student.grade_level}
               </span>
+              {(student.isRegistered === false || student.userStatus === 'Unregistered User ID' || student.learning_velocity === 'Unregistered User ID') && (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-extrabold flex items-center space-x-1">
+                  <span>⚠️ Unregistered User ID</span>
+                </span>
+              )}
             </div>
             <p className="text-slate-400 text-xs mt-0.5">
-              Overall Mastery: <strong className="text-emerald-400">{student.overall_mastery}%</strong> • Velocity: {student.learning_velocity}
+              Overall Mastery: <strong className="text-emerald-400">{student.overall_mastery}%</strong> • Status: {student.userStatus || student.learning_velocity}
             </p>
           </div>
         </div>
 
         <div className="flex items-center space-x-3">
+          {(student.isRegistered === false || student.userStatus === 'Unregistered User ID' || student.learning_velocity === 'Unregistered User ID') && (
+            <button
+              onClick={handleResendInvite}
+              className="px-3.5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl font-bold text-xs flex items-center space-x-1.5 transition-all"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>Copy Invitation Link</span>
+            </button>
+          )}
+
           <select
             value={selectedStudentId}
             onChange={(e) => setSelectedStudentId(e.target.value)}

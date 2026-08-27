@@ -108,9 +108,17 @@ export interface SubmissionAnalysis {
 export interface StudentProfile {
   id: string;
   name: string;
-  avatar: string;
+  avatar?: string;
+  email?: string;
+  teacherId?: string;
+  teacher_id?: string;
+  isRegistered?: boolean;
+  userStatus?: string;
+  class?: string;
   grade_level: string;
   overall_mastery: number; // percentage
+  overallAccuracy?: number;
+  totalEvaluations?: number;
   strengths: string[];
   needs_improvement: string[];
   common_error: ErrorCategory;

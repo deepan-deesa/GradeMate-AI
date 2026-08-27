@@ -34,7 +34,7 @@ export const CurriculumView: React.FC = () => {
 
   // Form state
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [name, setName] = useState('10th CBSE Mathematics 2026');
+  const [name, setName] = useState('');
   const [board, setBoard] = useState('CBSE');
   const [classYear, setClassYear] = useState('10');
   const [subject, setSubject] = useState('Mathematics');
@@ -59,18 +59,37 @@ export const CurriculumView: React.FC = () => {
     setIsProcessing(true);
 
     try {
+      let fileBase64 = '';
+      let fileMimeType = selectedFile ? selectedFile.type : '';
       let extractedFileText = rawText;
 
-      if (selectedFile && !extractedFileText) {
+      if (selectedFile) {
         try {
-          extractedFileText = await new Promise((resolve) => {
+          fileBase64 = await new Promise<string>((resolve) => {
             const reader = new FileReader();
-            reader.onload = (evt) => resolve((evt.target?.result as string) || '');
+            reader.onload = (evt) => {
+              const res = (evt.target?.result as string) || '';
+              // Remove data URL prefix e.g. "data:application/pdf;base64,"
+              const base64Content = res.includes(',') ? res.split(',')[1] : res;
+              resolve(base64Content);
+            };
             reader.onerror = () => resolve('');
-            reader.readAsText(selectedFile);
+            reader.readAsDataURL(selectedFile);
           });
         } catch (e) {
-          console.warn('File read error fallback:', e);
+          console.warn('Error reading file as base64:', e);
+        }
+
+        // If text file, also extract raw text
+        if (selectedFile.type.includes('text') || selectedFile.name.endsWith('.txt') || selectedFile.name.endsWith('.md')) {
+          try {
+            extractedFileText = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (evt) => resolve((evt.target?.result as string) || '');
+              reader.onerror = () => resolve('');
+              reader.readAsText(selectedFile);
+            });
+          } catch (e) {}
         }
       }
 
@@ -81,7 +100,9 @@ export const CurriculumView: React.FC = () => {
         subject,
         academic_year: academicYear,
         file_name: selectedFile ? selectedFile.name : `${name.replace(/\s+/g, '_')}.pdf`,
-        raw_text: extractedFileText || `${name} ${board} Class ${classYear} ${subject} Syllabus content`,
+        file_base64: fileBase64 || undefined,
+        file_mime_type: fileMimeType || (selectedFile?.name.endsWith('.pdf') ? 'application/pdf' : undefined),
+        raw_text: extractedFileText || undefined,
         onProgressStatus: (text) => setProcessingStatus(text),
       });
       setShowUploadModal(false);

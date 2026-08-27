@@ -9,13 +9,17 @@ export const AssessmentsView: React.FC = () => {
   const [topic, setTopic] = useState('Linear Equations');
   const [selectedCurrId, setSelectedCurrId] = useState(selectedCurriculumId || (curricula[0]?.id || 'curr_cbse_10_math'));
   const [assignedStudentId, setAssignedStudentId] = useState<string>('ALL');
-  const [maxMarks, setMaxMarks] = useState(10);
-  const [dueDate, setDueDate] = useState('2026-08-20');
+  const [maxMarks, setMaxMarks] = useState<number>(10);
+  const [questionMarks, setQuestionMarks] = useState<number>(1);
+  const [dueDate, setDueDate] = useState<string>('2026-08-30');
+  const [viewingAssessment, setViewingAssessment] = useState<any | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const assignments = dbState?.assignments || [];
 
   const handleCreateAssessment = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsGenerating(true);
     try {
       await createAssessment({
         title: title || 'Mathematics Assessment',
@@ -23,12 +27,16 @@ export const AssessmentsView: React.FC = () => {
         topic,
         curriculum_id: selectedCurrId,
         max_marks: maxMarks,
+        question_marks: questionMarks,
         due_date: dueDate,
         assigned_student_id: assignedStudentId,
       });
       setShowCreateModal(false);
       setTitle('');
-    } catch (e) {}
+    } catch (e) {
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleDeleteAssessment = async (e: React.MouseEvent, id: string, asgnTitle: string) => {
@@ -127,10 +135,10 @@ export const AssessmentsView: React.FC = () => {
                     Upload Answer Sheets
                   </button>
                   <button
-                    onClick={() => setActiveView('analysis')}
-                    className="px-3 py-2 bg-[#F4F2EC] hover:bg-[#EAE7DF] text-[#222521] rounded-xl font-semibold text-xs border border-[#E0DED7]"
+                    onClick={() => setViewingAssessment(as)}
+                    className="px-3 py-2 bg-[#F4F2EC] hover:bg-[#EAE7DF] text-[#222521] rounded-xl font-semibold text-xs border border-[#E0DED7] transition-colors"
                   >
-                    View
+                    View Questions ({as.questions?.length || 0})
                   </button>
                   <button
                     onClick={(e) => handleDeleteAssessment(e, as.id, as.title)}
@@ -211,17 +219,36 @@ export const AssessmentsView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[#545850] mb-1">Max Marks</label>
-                  <input
-                    type="number"
-                    required
+                  <label className="block text-xs font-semibold text-[#545850] mb-1">Total Marks</label>
+                  <select
                     value={maxMarks}
                     onChange={(e) => setMaxMarks(Number(e.target.value))}
-                    className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
-                  />
+                    className="w-full px-2.5 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-xs font-bold text-[#222521] focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
+                  >
+                    <option value={10}>10 Marks</option>
+                    <option value={15}>15 Marks</option>
+                    <option value={20}>20 Marks</option>
+                    <option value={25}>25 Marks</option>
+                    <option value={50}>50 Marks</option>
+                  </select>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#545850] mb-1 font-bold text-[#2D4A3E]">Question Type</label>
+                  <select
+                    value={questionMarks}
+                    onChange={(e) => setQuestionMarks(Number(e.target.value))}
+                    className="w-full px-2.5 py-2 bg-[#FDFCF8] border border-[#2D4A3E] rounded-xl text-xs font-bold text-[#222521] focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
+                  >
+                    <option value={1}>1 Mark ({Math.round(maxMarks / 1)} Questions)</option>
+                    <option value={2}>2 Marks ({Math.round(maxMarks / 2)} Questions)</option>
+                    <option value={3}>3 Marks ({Math.round(maxMarks / 3)} Questions)</option>
+                    <option value={5}>5 Marks ({Math.round(maxMarks / 5)} Questions)</option>
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-[#545850] mb-1">Due Date</label>
                   <input
@@ -229,14 +256,22 @@ export const AssessmentsView: React.FC = () => {
                     required
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
+                    className="w-full px-2 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
                   />
                 </div>
+              </div>
+
+              <div className="p-3 bg-[#F4F2EC] rounded-xl border border-[#E0DED7] text-[11px] text-[#2D4A3E] font-medium flex items-center justify-between">
+                <span>AI Output Specification:</span>
+                <span className="font-bold bg-white px-2 py-0.5 rounded border border-[#E0DED7]">
+                  {Math.round(maxMarks / questionMarks)} × {questionMarks}-Mark Question(s) = {maxMarks} Total Marks
+                </span>
               </div>
 
               <div className="flex items-center justify-end space-x-3 pt-2">
                 <button
                   type="button"
+                  disabled={isGenerating}
                   onClick={() => setShowCreateModal(false)}
                   className="px-4 py-2 text-xs font-medium text-[#6E7269] hover:text-[#222521]"
                 >
@@ -244,12 +279,86 @@ export const AssessmentsView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white rounded-xl text-xs font-bold"
+                  disabled={isGenerating}
+                  className="px-4 py-2 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-2 disabled:opacity-50"
                 >
-                  Create Assessment
+                  {isGenerating ? (
+                    <>
+                      <span className="animate-spin text-sm">⚡</span>
+                      <span>Generating AI Questions...</span>
+                    </>
+                  ) : (
+                    <span>Generate AI Assessment</span>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW QUESTIONS MODAL */}
+      {viewingAssessment && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-[#E0DED7] shadow-xl max-w-2xl w-full p-6 space-y-4 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#E0DED7] pb-3 shrink-0">
+              <div>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#F4F2EC] text-[#2D4A3E] border border-[#E0DED7]">
+                  {viewingAssessment.topic}
+                </span>
+                <h2 className="text-lg font-bold text-[#222521] mt-1">{viewingAssessment.title}</h2>
+                <p className="text-xs text-[#6E7269]">
+                  Total Marks: {viewingAssessment.max_marks} marks • Total Questions: {viewingAssessment.questions?.length || 0} • Due: {viewingAssessment.due_date}
+                </p>
+              </div>
+              <button
+                onClick={() => setViewingAssessment(null)}
+                className="px-3 py-1.5 bg-[#F4F2EC] hover:bg-[#EAE7DF] text-[#222521] rounded-xl text-xs font-bold transition-colors shrink-0"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="overflow-y-auto space-y-4 pr-1 flex-1">
+              {!viewingAssessment.questions || viewingAssessment.questions.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[#6E7269] font-medium bg-[#FDFCF8] rounded-xl border border-dashed border-[#E0DED7]">
+                  No questions found for this assessment.
+                </div>
+              ) : (
+                viewingAssessment.questions.map((q: any, idx: number) => (
+                  <div key={q.id || idx} className="p-4 rounded-xl bg-[#FDFCF8] border border-[#E0DED7] space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-[#2D4A3E] bg-[#EAF0E8] px-2 py-0.5 rounded border border-[#C2D4C1]">
+                        Question {idx + 1}
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        {q.unit && <span className="text-[10px] text-[#6E7269] bg-white px-2 py-0.5 rounded border border-[#E0DED7]">{q.unit}</span>}
+                        {q.topic && <span className="text-[10px] text-[#2D4A3E] bg-white px-2 py-0.5 rounded border border-[#E0DED7] font-semibold">{q.topic}</span>}
+                        <span className="font-bold text-[#222521] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded">{q.max_marks || viewingAssessment.question_marks || 1} Mark{(q.max_marks || 1) > 1 ? 's' : ''}</span>
+                      </div>
+                    </div>
+                    <div className="text-sm font-bold text-[#222521] leading-relaxed">
+                      {q.question_text || q.question}
+                    </div>
+                    {q.rubric_guidelines && (
+                      <div className="mt-2 p-2.5 bg-white rounded-lg border border-[#E0DED7] text-xs text-[#545850]">
+                        <span className="font-bold text-[#2D4A3E] block mb-0.5">Answer Key & Grading Rubric:</span>
+                        <p className="whitespace-pre-wrap">{q.rubric_guidelines}</p>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-[#E0DED7] flex items-center justify-end shrink-0">
+              <button
+                onClick={() => setViewingAssessment(null)}
+                className="px-4 py-2 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white rounded-xl text-xs font-bold"
+              >
+                Done Reviewing
+              </button>
+            </div>
           </div>
         </div>
       )}

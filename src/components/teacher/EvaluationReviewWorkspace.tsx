@@ -82,10 +82,10 @@ export const EvaluationReviewWorkspace: React.FC = () => {
               <span className="text-xs font-bold uppercase tracking-wider text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded-full border border-[#BFDBFE]">
                 Desktop Evaluation Workspace
               </span>
-              <span className="text-xs text-[#64748B]">Student: {selectedSubmission?.student_name || 'Rahul Kumar'}</span>
+              <span className="text-xs text-[#64748B]">Student: {selectedSubmission?.student_name || 'Enrolled Student'}</span>
             </div>
             <h1 className="text-lg font-extrabold text-[#1E293B]">
-              {selectedSubmission?.assignment_title || 'Linear Equations Assessment'}
+              {selectedSubmission?.assignment_title || `${selectedSubmission?.topic || 'Handwritten Math'} Assessment`}
             </h1>
           </div>
         </div>
@@ -113,12 +113,12 @@ export const EvaluationReviewWorkspace: React.FC = () => {
         <div className="col-span-3 bg-white p-5 overflow-y-auto space-y-5">
           <div>
             <span className="text-xs font-bold text-[#2563EB] uppercase">Topic / Module</span>
-            <h3 className="font-bold text-sm text-[#1E293B] mt-0.5">{selectedSubmission?.topic || 'Linear Equations'}</h3>
+            <h3 className="font-bold text-sm text-[#1E293B] mt-0.5">{selectedSubmission?.topic || 'Mathematics'}</h3>
           </div>
 
           <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0] space-y-1">
             <p className="text-xs font-bold text-[#64748B] uppercase">Question</p>
-            <p className="text-sm font-extrabold text-[#1E293B]">{selectedSubmission?.question || 'Solve for x: 2x + 5 = 15'}</p>
+            <p className="text-sm font-extrabold text-[#1E293B]">{selectedSubmission?.question || 'Uploaded Math Question'}</p>
             <p className="text-xs text-[#64748B] font-medium pt-1">Max Marks: {selectedSubmission?.max_score || 10} Marks</p>
           </div>
 

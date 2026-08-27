@@ -43,7 +43,7 @@ interface AppContextType {
   updateEvaluationSettings: (newSettings: EvaluationSettings) => Promise<void>;
   
   // API Actions
-  refreshState: () => Promise<void>;
+  refreshState: (overrideSession?: UserSession | null) => Promise<void>;
   resetToDemo: () => Promise<void>;
   uploadSyllabus: (payload: {
     name: string;
@@ -52,12 +52,14 @@ interface AppContextType {
     subject: string;
     academic_year: string;
     file_name?: string;
+    file_base64?: string;
+    file_mime_type?: string;
     raw_text?: string;
     onProgressStatus?: (statusText: string) => void;
   }) => Promise<Curriculum>;
   deleteSyllabus: (id: string) => Promise<void>;
   updateCurriculumTopic: (curriculumId: string, topicId: string, data: Partial<CurriculumTopic>) => Promise<void>;
-  createAssessment: (payload: { title: string; subject: string; topic: string; curriculum_id: string; max_marks?: number; due_date?: string; assigned_student_id?: string }) => Promise<any>;
+  createAssessment: (payload: { title: string; subject: string; topic: string; unit?: string; curriculum_id: string; max_marks?: number; question_marks?: number; due_date?: string; assigned_student_id?: string }) => Promise<any>;
   deleteAssessment: (id: string) => Promise<void>;
   analyzeHandwriting: (payload: {
     image_base64?: string;
@@ -83,7 +85,11 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [userSession, setUserSession] = useState<UserSession | null>(() => {
     try {
-      const stored = localStorage.getItem('assessly_user_session');
+      // Clean up legacy localStorage item if present to prevent automatic login after app reopen
+      if (typeof window !== 'undefined' && localStorage.getItem('assessly_user_session')) {
+        localStorage.removeItem('assessly_user_session');
+      }
+      const stored = typeof window !== 'undefined' ? sessionStorage.getItem('assessly_user_session') : null;
       if (stored) {
         const parsed = JSON.parse(stored);
         return parsed;
@@ -161,7 +167,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.user.studentId) {
         setSelectedStudentId(data.user.studentId);
       }
-      localStorage.setItem('assessly_user_session', JSON.stringify(session));
+      sessionStorage.setItem('assessly_user_session', JSON.stringify(session));
+
+      // Fetch fresh database state for authenticated user BEFORE opening dashboard
+      await refreshState(session);
 
       if (actualRole === 'TEACHER') {
         setActiveView('dashboard');
@@ -177,6 +186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = () => {
     setUserSession(null);
+    sessionStorage.removeItem('assessly_user_session');
     localStorage.removeItem('assessly_user_session');
     setDbState(null);
     setActiveView('login');
@@ -226,20 +236,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const refreshState = async () => {
+  const refreshState = async (overrideSession?: UserSession | null) => {
+    const activeSession = overrideSession !== undefined ? overrideSession : userSession;
     try {
       setIsLoading(true);
       const queryParams = new URLSearchParams();
-      if (userSession?.id) {
-        queryParams.append('teacherId', userSession.id);
-        queryParams.append('role', userSession.role);
-        if (userSession.studentId) queryParams.append('studentId', userSession.studentId);
+      if (activeSession?.id) {
+        queryParams.append('teacherId', activeSession.id);
+        queryParams.append('role', activeSession.role);
+        if (activeSession.studentId) queryParams.append('studentId', activeSession.studentId);
       }
       const res = await fetch(`/api/db/state?${queryParams.toString()}`, {
         headers: {
-          'x-teacher-id': userSession?.id || '',
-          'x-user-role': userSession?.role || '',
-          'x-student-id': userSession?.studentId || '',
+          'x-teacher-id': activeSession?.id || '',
+          'x-user-role': activeSession?.role || '',
+          'x-student-id': activeSession?.studentId || '',
         },
       });
       if (res.ok) {
@@ -259,6 +270,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
           setActivePracticeSet(null);
         }
+        if (data.students && data.students.length > 0) {
+          if (!data.students.some((s: any) => s.id === selectedStudentId)) {
+            setSelectedStudentId(data.students[0].id);
+          }
+        }
         if (data.curricula && data.curricula.length > 0) {
           setSelectedCurriculumId(data.curricula[0].id);
         }
@@ -272,7 +288,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   useEffect(() => {
-    refreshState();
+    if (userSession) {
+      refreshState(userSession);
+    } else {
+      setDbState(null);
+    }
   }, [userSession]);
 
   const uploadSyllabus = async (payload: {
@@ -282,6 +302,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     subject: string;
     academic_year: string;
     file_name?: string;
+    file_base64?: string;
+    file_mime_type?: string;
     raw_text?: string;
     onProgressStatus?: (statusText: string) => void;
   }): Promise<Curriculum> => {
@@ -373,8 +395,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     title: string;
     subject: string;
     topic: string;
+    unit?: string;
     curriculum_id: string;
     max_marks?: number;
+    question_marks?: number;
     due_date?: string;
     assigned_student_id?: string;
   }) => {
@@ -387,7 +411,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           teacher_id: userSession?.id || 'usr_teacher_demo',
         }),
       });
-      if (!res.ok) throw new Error('Failed to create assessment');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to generate AI assessment from syllabus');
+      }
       const data = await res.json();
       addToast(`Created assessment "${data.assignment.title}" linked to syllabus!`, 'success');
       await refreshState();

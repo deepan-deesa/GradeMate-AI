@@ -1,0 +1,49 @@
+{
+  "as_1787812907799": [
+    {
+      "id": "q_1787812907799_1",
+      "question_text": "Solve the system of linear equations in three variables for x, y, and z: x + y + z = 6, y + z = 5, and z = 3.",
+      "max_marks": 2,
+      "unit": "CHAPTER 3 – Algebra",
+      "topic": "3.2 Simultaneous Linear Equations in Three Variables",
+      "difficulty": "Easy",
+      "rubric_guidelines": "1 mark for substituting z = 3 into y + z = 5 to find y = 2. 1 mark for substituting y = 2 and z = 3 into x + y + z = 6 to obtain x = 1. Final Answer: x = 1, y = 2, z = 3."
+    },
+    {
+      "id": "q_1787812907799_2",
+      "question_text": "Find the slope of a line whose angle of inclination is 45 degrees. Also, state the algebraic condition for two lines with slopes m1 and m2 to be perpendicular.",
+      "max_marks": 2,
+      "unit": "CHAPTER 5 – Coordinate Geometry",
+      "topic": "5.4 Inclination of a Line",
+      "difficulty": "Easy",
+      "rubric_guidelines": "1 mark for calculating slope m = tan(45°) = 1. 1 mark for stating the perpendicularity condition m1 * m2 = -1."
+    },
+    {
+      "id": "q_1787812907799_3",
+      "question_text": "Find the equation of the straight line passing through the point (3, 5) with a slope of 2 using the point-slope form.",
+      "max_marks": 2,
+      "unit": "CHAPTER 5 – Coordinate Geometry",
+      "topic": "5.5 Straight Line",
+      "difficulty": "Medium",
+      "rubric_guidelines": "1 mark for substituting into point-slope formula y - y1 = m(x - x1) to get y - 5 = 2(x - 3). 1 mark for simplifying to standard linear form 2x - y - 1 = 0."
+    },
+    {
+      "id": "q_1787812907799_4",
+      "question_text": "Calculate the slope and y-intercept of the straight line represented by the general linear equation 4x - 2y + 8 = 0.",
+      "max_marks": 2,
+      "unit": "CHAPTER 5 – Coordinate Geometry",
+      "topic": "5.6 General Form of a Straight Line",
+      "difficulty": "Medium",
+      "rubric_guidelines": "1 mark for computing slope m = -A/B = -4/(-2) = 2. 1 mark for computing y-intercept = -C/B = -8/(-2) = 4."
+    },
+    {
+      "id": "q_1787812907799_5",
+      "question_text": "Identify the type of function given by f(x) = 3x - 7 and describe its graphical curve shape on a Cartesian plane.",
+      "max_marks": 2,
+      "unit": "CHAPTER 1 – Relations and Functions",
+      "topic": "1.10 Identifying the Graphs of Linear, Quadratic, Cubic, and Reciprocal Functions",
+      "difficulty": "Easy",
+      "rubric_guidelines": "1 mark for identifying f(x) as a Linear Function. 1 mark for describing its graph as a continuous straight line with slope 3 and y-intercept (0, -7)."
+    }
+  ]
+}

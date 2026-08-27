@@ -33,11 +33,19 @@ export const StudentDashboard: React.FC = () => {
 
   // Strictly filter assigned assessments for current authenticated student
   const assignedAssessments = (dbState?.assignments || []).filter((as: any) => {
-    if (!as.assignedStudentId || as.assignedStudentId === 'ALL') return true;
+    const studentTeacherId = currentStudent?.teacherId || (currentStudent as any)?.teacher_id || (userSession as any)?.teacherId;
+    const asgnTeacherId = as.teacherId || as.teacher_id;
+    if (studentTeacherId && asgnTeacherId && asgnTeacherId !== studentTeacherId) {
+      return false;
+    }
+
+    const targetStd = as.assignedStudentId || as.assigned_student_id;
+    if (!targetStd || targetStd === 'ALL') return true;
+
     return (
-      (userSession?.studentId && as.assignedStudentId === userSession.studentId) ||
-      (currentStudent?.id && as.assignedStudentId === currentStudent.id) ||
-      (userSession?.email && as.assignedStudentId?.toLowerCase() === userSession.email.toLowerCase())
+      (userSession?.studentId && targetStd === userSession.studentId) ||
+      (currentStudent?.id && targetStd === currentStudent.id) ||
+      (userSession?.email && targetStd.toLowerCase() === userSession.email.toLowerCase())
     );
   });
 

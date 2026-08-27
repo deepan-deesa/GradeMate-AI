@@ -20,65 +20,17 @@ export const HandwrittenUpload: React.FC = () => {
   const students = dbState?.students || [];
 
   const [selectedCurriculum, setSelectedCurriculum] = useState<string>(selectedCurriculumId || (curricula[0]?.id || 'curr_cbse_10_math'));
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('std_1');
-  const [question, setQuestion] = useState<string>('Solve for x: 2x + 5 = 15');
-  const [topic, setTopic] = useState<string>('Linear Equations');
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id || '');
+  const [customStudentName, setCustomStudentName] = useState<string>('');
+  const [question, setQuestion] = useState<string>('');
+  const [topic, setTopic] = useState<string>('');
   const [subject, setSubject] = useState<string>('Mathematics');
   const [maxMarks, setMaxMarks] = useState<number>(10);
   const [feedbackMode, setFeedbackMode] = useState<FeedbackMode>(evaluationSettings?.feedbackMode || 'Encouraging');
   const [imageBase64, setImageBase64] = useState<string>('');
-  const [previewName, setPreviewName] = useState<string>('Rahul_LinearEq_Work.png');
+  const [previewName, setPreviewName] = useState<string>('Handwritten_Answer_Sheet.png');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
-
-  // Sample pre-loaded papers for 1-click testing!
-  const samplePapers = [
-    {
-      title: 'Rahul Kumar — Linear Equations (Division Error)',
-      studentId: 'std_1',
-      question: 'Solve for x: 2x + 5 = 15',
-      topic: 'Linear Equations',
-      preview: '2x + 5 = 15 -> 2x = 10 -> x = 6 (Err)',
-      svg: generateHandwrittenPaperSvg('Rahul Kumar', '2x + 5 = 15', [
-        { line: '2x + 5 = 15', isCorrect: true },
-        { line: '2x = 10', isCorrect: true },
-        { line: 'x = 6', isCorrect: false },
-      ]),
-    },
-    {
-      title: 'Priya Sharma — Fraction Denominator Cross Multiplication',
-      studentId: 'std_2',
-      question: 'Solve: x/3 + x/2 = 5',
-      topic: 'Fractions',
-      preview: 'x/3 + x/2 = 5 -> 2x/6 + 3x/6 = 5 -> 5x = 5 (Err)',
-      svg: generateHandwrittenPaperSvg('Priya Sharma', 'x/3 + x/2 = 5', [
-        { line: 'x/3 + x/2 = 5', isCorrect: true },
-        { line: '2x/6 + 3x/6 = 5', isCorrect: true },
-        { line: '5x/6 = 5 => 5x = 5', isCorrect: false },
-      ]),
-    },
-    {
-      title: 'Arun Patel — Algebraic Sign Transposition',
-      studentId: 'std_3',
-      question: 'Simplify: -(3x - 8) + 2x',
-      topic: 'Algebraic Simplification',
-      preview: '-(3x - 8) + 2x -> -3x - 8 + 2x = -x - 8 (Err)',
-      svg: generateHandwrittenPaperSvg('Arun Patel', 'Simplify: -(3x - 8) + 2x', [
-        { line: '-(3x - 8) + 2x', isCorrect: true },
-        { line: '-3x - 8 + 2x', isCorrect: false },
-        { line: '= -x - 8', isCorrect: false },
-      ]),
-    },
-  ];
-
-  const handleSelectSample = (sample: typeof samplePapers[0]) => {
-    setSelectedStudentId(sample.studentId);
-    setQuestion(sample.question);
-    setTopic(sample.topic);
-    setImageBase64(sample.svg);
-    setPreviewName(sample.title);
-    addToast(`Loaded sample handwritten paper: ${sample.title}`, 'info');
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -93,8 +45,15 @@ export const HandwrittenUpload: React.FC = () => {
   };
 
   const handleAnalyze = async () => {
+    if (!imageBase64) {
+      addToast('Please upload or drag & drop a student handwritten answer sheet file first.', 'error');
+      return;
+    }
+
     setIsAnalyzing(true);
-    const selectedStudent = students.find((s) => s.id === selectedStudentId) || students[0];
+    const selectedStudent = students.find((s) => s.id === selectedStudentId);
+    const activeStudentName = selectedStudent?.name || customStudentName || (students[0]?.name) || 'Enrolled Student';
+    const activeStudentId = selectedStudent?.id || selectedStudentId || (students[0]?.id) || 'std_1';
 
     try {
       setAnalysisStep('1/4: Vision & Handwriting OCR Extraction...');
@@ -109,17 +68,13 @@ export const HandwrittenUpload: React.FC = () => {
       setAnalysisStep('4/4: Diagnosing Error DNA & Closing the Learning Loop...');
 
       const sub = await analyzeHandwriting({
-        image_base64: imageBase64 || generateHandwrittenPaperSvg(selectedStudent?.name || 'Rahul Kumar', question, [
-          { line: '2x + 5 = 15', isCorrect: true },
-          { line: '2x = 10', isCorrect: true },
-          { line: 'x = 6', isCorrect: false },
-        ]),
-        question,
-        topic,
+        image_base64: imageBase64,
+        question: question || undefined,
+        topic: topic || undefined,
         subject,
         max_marks: maxMarks,
-        student_id: selectedStudent?.id || 'std_1',
-        student_name: selectedStudent?.name || 'Rahul Kumar',
+        student_id: activeStudentId,
+        student_name: activeStudentName,
         feedback_mode: feedbackMode,
         curriculum_id: selectedCurriculum,
       });
@@ -128,6 +83,7 @@ export const HandwrittenUpload: React.FC = () => {
       setActiveView('analysis');
     } catch (e) {
       console.error(e);
+      addToast('Error processing answer sheet evaluation.', 'error');
     } finally {
       setIsAnalyzing(false);
       setAnalysisStep('');
@@ -145,49 +101,9 @@ export const HandwrittenUpload: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-white">Evaluate Student Handwritten Answer</h1>
             <p className="text-slate-400 text-xs mt-0.5">
-              Upload student paper or choose a pre-loaded sample. AI extracts reasoning, grades steps, and identifies learning gaps.
+              Upload student answer sheet image or document (JPG, PNG, WebP, PDF). Vision AI extracts reasoning, grades steps, and identifies learning gaps.
             </p>
           </div>
-        </div>
-      </div>
-
-      {/* 1-Click Sample Papers Carousel */}
-      <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-1.5">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Or Select a Sample Handwritten Paper (1-Click Evaluation)</span>
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {samplePapers.map((sample, idx) => (
-            <div
-              key={idx}
-              onClick={() => handleSelectSample(sample)}
-              className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-blue-500 cursor-pointer transition-all flex flex-col justify-between group shadow-md"
-            >
-              <div>
-                <div className="text-xs font-bold text-blue-300 group-hover:text-blue-200 mb-1">{sample.title}</div>
-                <div className="text-[11px] text-slate-400 font-mono mb-2">{sample.preview}</div>
-              </div>
-              <div className="text-[10px] text-indigo-400 font-semibold flex items-center space-x-1 pt-2 border-t border-slate-800">
-                <span>Click to load paper</span>
-                <span>→</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-          <span className="text-xs text-slate-400">Want to explore all 60 handwritten equations & scanned images from Dataset 1?</span>
-          <button
-            onClick={() => setActiveView('dataset1')}
-            className="text-xs text-blue-400 hover:text-blue-300 font-bold underline flex items-center space-x-1"
-          >
-            <span>Open Dataset 1 Explorer</span>
-            <span>→</span>
-          </button>
         </div>
       </div>
 
@@ -221,18 +137,32 @@ export const HandwrittenUpload: React.FC = () => {
 
           {/* Student Selector */}
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">Select Student</label>
-            <select
-              value={selectedStudentId}
-              onChange={(e) => setSelectedStudentId(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-            >
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.common_error} history)
-                </option>
-              ))}
-            </select>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">Student Name</label>
+            {students.length > 0 ? (
+              <select
+                value={selectedStudentId || students[0]?.id}
+                onChange={(e) => {
+                  setSelectedStudentId(e.target.value);
+                  const found = students.find((s) => s.id === e.target.value);
+                  if (found) setCustomStudentName(found.name);
+                }}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+              >
+                {students.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.common_error || 'Enrolled Student'})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={customStudentName}
+                onChange={(e) => setCustomStudentName(e.target.value)}
+                placeholder="Enter Student Name (e.g. Rahul Kumar)"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
+              />
+            )}
           </div>
 
           {/* Question Text */}
@@ -243,8 +173,11 @@ export const HandwrittenUpload: React.FC = () => {
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500"
-              placeholder="e.g. Solve for x: 2x + 5 = 15"
+              placeholder="Leave blank to auto-detect from image (or type question)"
             />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Leave blank to automatically extract question text & topic from handwritten image via Vision AI.
+            </p>
           </div>
 
           {/* Topic & Max Marks */}

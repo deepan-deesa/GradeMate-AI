@@ -115,6 +115,8 @@ export const TeacherDashboard: React.FC = () => {
   const nextActions = dbState?.nextBestActions || [];
   const groups = dbState?.groups || [];
 
+  const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null);
+
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStudentName || !newStudentEmail) {
@@ -136,10 +138,14 @@ export const TeacherDashboard: React.FC = () => {
       });
       const data = await res.json();
       if (data.success) {
-        addToast(`Successfully added student ${newStudentName}!`, 'success');
-        setShowAddStudentModal(false);
-        setNewStudentName('');
-        setNewStudentEmail('');
+        addToast(data.message || `Successfully added student ${newStudentName}!`, 'success');
+        if (data.inviteUrl) {
+          setCreatedInviteUrl(data.inviteUrl);
+        } else {
+          setShowAddStudentModal(false);
+          setNewStudentName('');
+          setNewStudentEmail('');
+        }
         await refreshState();
       } else {
         addToast(data.error || 'Failed to add student', 'error');
@@ -451,7 +457,14 @@ export const TeacherDashboard: React.FC = () => {
                     <div className="flex items-center space-x-3">
                       <img src={student.avatar} alt={student.name} className="w-8 h-8 rounded-full object-cover border border-[#E0DED7]" />
                       <div>
-                        <div className="text-xs font-bold text-[#222521]">{student.name}</div>
+                        <div className="flex items-center space-x-1.5">
+                          <div className="text-xs font-bold text-[#222521]">{student.name}</div>
+                          {(student.isRegistered === false || student.userStatus === 'Unregistered User ID' || student.learning_velocity === 'Unregistered User ID') && (
+                            <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-extrabold text-[9px] border border-amber-300">
+                              Unregistered ID
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] text-[#6E7269]">{student.common_error}</div>
                       </div>
                     </div>
@@ -497,69 +510,123 @@ export const TeacherDashboard: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleAddStudent} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-[#545850] mb-1">Student Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Rahul Sharma"
-                  value={newStudentName}
-                  onChange={(e) => setNewStudentName(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
-                />
-              </div>
+            {createdInviteUrl ? (
+              <div className="space-y-4 py-2">
+                <div className="p-4 bg-[#FAF0E6] rounded-2xl border border-[#E8CEB5] text-[#8C521F] space-y-2">
+                  <div className="flex items-center space-x-2 font-bold text-sm text-[#222521]">
+                    <Sparkles className="w-5 h-5 text-[#C88A58]" />
+                    <span>Invitation Link Generated!</span>
+                  </div>
+                  <p className="text-xs text-[#545850]">
+                    An invitation email with default credentials has been dispatched to <strong>{newStudentEmail}</strong>.
+                  </p>
+                  <div className="p-3 bg-white rounded-xl border border-[#E0DED7] text-xs space-y-1 text-[#222521]">
+                    <div className="flex justify-between">
+                      <span className="font-semibold text-[#6E7269]">Default Login Password:</span>
+                      <span className="font-mono font-bold text-[#2D4A3E] bg-[#FAF0E6] px-2 py-0.5 rounded">student123</span>
+                    </div>
+                    <div className="pt-1">
+                      <span className="font-semibold text-[#6E7269] block mb-0.5">Invitation Link:</span>
+                      <div className="font-mono text-[11px] break-all select-all text-[#222521] p-1.5 bg-[#FDFCF8] rounded border border-[#E0DED7]">
+                        {createdInviteUrl}
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#545850] mb-1">Student Email Address *</label>
-                <input
-                  type="email"
-                  required
-                  placeholder="e.g. rahul@grademate.edu"
-                  value={newStudentEmail}
-                  onChange={(e) => setNewStudentEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
-                />
+                <div className="flex items-center justify-end space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdInviteUrl);
+                      addToast('Invitation link copied to clipboard!', 'success');
+                    }}
+                    className="px-4 py-2 bg-[#FAF0E6] hover:bg-[#E8CEB5] text-[#8C521F] font-bold rounded-xl text-xs flex items-center space-x-1"
+                  >
+                    <span>Copy Invitation Link</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddStudentModal(false);
+                      setCreatedInviteUrl(null);
+                      setNewStudentName('');
+                      setNewStudentEmail('');
+                    }}
+                    className="px-4 py-2 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white rounded-xl text-xs font-bold shadow-sm"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            ) : (
+              <form onSubmit={handleAddStudent} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-[#545850] mb-1">Grade / Class</label>
+                  <label className="block text-xs font-semibold text-[#545850] mb-1">Student Full Name *</label>
                   <input
                     type="text"
-                    value={newStudentGrade}
-                    onChange={(e) => setNewStudentGrade(e.target.value)}
+                    required
+                    placeholder="e.g. Rahul Sharma"
+                    value={newStudentName}
+                    onChange={(e) => setNewStudentName(e.target.value)}
                     className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs font-semibold text-[#545850] mb-1">Section</label>
+                  <label className="block text-xs font-semibold text-[#545850] mb-1">Student Email Address *</label>
                   <input
-                    type="text"
-                    value={newStudentSection}
-                    onChange={(e) => setNewStudentSection(e.target.value)}
+                    type="email"
+                    required
+                    placeholder="e.g. rahul@grademate.edu"
+                    value={newStudentEmail}
+                    onChange={(e) => setNewStudentEmail(e.target.value)}
                     className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
                   />
                 </div>
-              </div>
 
-              <div className="flex items-center justify-end space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddStudentModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#6E7269] hover:text-[#222521]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white rounded-xl text-xs font-bold shadow-sm disabled:opacity-50"
-                >
-                  {isSubmitting ? 'Adding...' : 'Add Student'}
-                </button>
-              </div>
-            </form>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#545850] mb-1">Grade / Class</label>
+                    <input
+                      type="text"
+                      value={newStudentGrade}
+                      onChange={(e) => setNewStudentGrade(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#545850] mb-1">Section</label>
+                    <input
+                      type="text"
+                      value={newStudentSection}
+                      onChange={(e) => setNewStudentSection(e.target.value)}
+                      className="w-full px-3 py-2 bg-[#FDFCF8] border border-[#E0DED7] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddStudentModal(false);
+                      setCreatedInviteUrl(null);
+                    }}
+                    className="px-4 py-2 text-xs font-medium text-[#6E7269] hover:text-[#222521]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-4 py-2 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white rounded-xl text-xs font-bold shadow-sm disabled:opacity-50"
+                  >
+                    {isSubmitting ? 'Adding...' : 'Add Student & Dispatch Invite'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

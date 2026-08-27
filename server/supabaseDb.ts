@@ -47,6 +47,8 @@ export function getEmptyDatabase(): AppDatabase {
     nextBestActions: [],
     interventions: [],
     practiceSets: [],
+    invitations: [],
+    otpRequests: [],
     classStats: {
       totalStudents: 0,
       totalAssignments: 0,
@@ -92,25 +94,42 @@ export async function loadDatabaseFromSupabase(): Promise<AppDatabase> {
 
     // 0. Hydrate TeacherStudent / teacher_students relationships
     try {
+      const relMap = new Map<string, any>();
       const { data: dbTS } = await supabase.from('TeacherStudent').select('*');
       if (dbTS && dbTS.length > 0) {
-        db.teacherStudents = dbTS.map((ts: any) => ({
-          id: ts.id,
-          teacherId: ts.teacherId || ts.teacher_id,
-          studentId: ts.studentId || ts.student_id,
-          createdAt: ts.createdAt || ts.created_at,
-        }));
-      } else {
-        const { data: dbTS2 } = await supabase.from('teacher_students').select('*');
-        if (dbTS2 && dbTS2.length > 0) {
-          db.teacherStudents = dbTS2.map((ts: any) => ({
-            id: ts.id,
-            teacherId: ts.teacher_id || ts.teacherId,
-            studentId: ts.student_id || ts.studentId,
-            createdAt: ts.created_at || ts.createdAt,
-          }));
-        }
+        dbTS.forEach((ts: any) => {
+          const tId = ts.teacherId || ts.teacher_id;
+          const sId = ts.studentId || ts.student_id;
+          if (tId && sId) {
+            const key = `${tId}_${sId}`;
+            relMap.set(key, {
+              id: ts.id || `ts_${key}`,
+              teacherId: tId,
+              studentId: sId,
+              createdAt: ts.createdAt || ts.created_at,
+            });
+          }
+        });
       }
+      const { data: dbTS2 } = await supabase.from('teacher_students').select('*');
+      if (dbTS2 && dbTS2.length > 0) {
+        dbTS2.forEach((ts: any) => {
+          const tId = ts.teacher_id || ts.teacherId;
+          const sId = ts.student_id || ts.studentId;
+          if (tId && sId) {
+            const key = `${tId}_${sId}`;
+            if (!relMap.has(key)) {
+              relMap.set(key, {
+                id: ts.id || `ts_${key}`,
+                teacherId: tId,
+                studentId: sId,
+                createdAt: ts.created_at || ts.createdAt,
+              });
+            }
+          }
+        });
+      }
+      db.teacherStudents = Array.from(relMap.values());
     } catch (relErr) {
       console.warn('[Supabase DB] Note fetching teacherStudents table:', relErr);
     }
@@ -125,17 +144,22 @@ export async function loadDatabaseFromSupabase(): Promise<AppDatabase> {
         passwordHash: u.passwordHash,
         role: u.role,
         studentId: u.studentId,
+        teacherId: u.teacherId || u.teacher_id,
+        teacher_id: u.teacher_id || u.teacherId,
         createdAt: u.createdAt,
       }));
 
       dbUsers.forEach((u: any) => {
         if (u.role === 'STUDENT') {
           const stdId = u.studentId || `std_${u.id}`;
+          const tId = u.teacherId || u.teacher_id;
           if (!db.students.some((s) => s.id === stdId)) {
             db.students.push({
               id: stdId,
               name: u.name,
               email: u.email,
+              teacherId: tId,
+              teacher_id: tId,
               class: 'Grade 10 A',
               overall_mastery: 0,
               overallAccuracy: 0,
@@ -216,16 +240,18 @@ export async function loadDatabaseFromSupabase(): Promise<AppDatabase> {
     if (dbAssessments && dbAssessments.length > 0) {
       db.assignments = dbAssessments.map((a: any) => ({
         id: a.id,
-        teacherId: a.teacherId,
+        teacherId: a.teacherId || a.teacher_id,
+        teacher_id: a.teacher_id || a.teacherId,
         curriculumId: a.curriculumId,
+        assignedStudentId: a.assignedStudentId || a.assigned_student_id || 'ALL',
         title: a.title,
         subject: a.subject,
-        topic: 'General Topic',
+        topic: a.topic || 'General Topic',
         total_submissions: 0,
-        max_marks: a.totalMarks,
+        max_marks: a.totalMarks || a.max_marks || 10,
         average_score: 0,
         due_date: a.dueDate ? String(a.dueDate).split('T')[0] : '2026-08-30',
-        questions: [],
+        questions: Array.isArray(a.questions) ? a.questions : [],
         createdAt: a.createdAt,
       }));
     }
@@ -258,13 +284,31 @@ export async function loadDatabaseFromSupabase(): Promise<AppDatabase> {
           }
         });
 
-        console.log('[Supabase Cloud] Synchronized JSON state snapshot!');
+        // Merge assignments while retaining generated questions
+        const combinedAssignments = [...db.assignments];
+        (parsed.assignments || []).forEach((pa: any) => {
+          const matchIdx = combinedAssignments.findIndex((ca) => ca.id === pa.id);
+          if (matchIdx === -1) {
+            combinedAssignments.push(pa);
+          } else {
+            const targetAsgn = combinedAssignments[matchIdx] as any;
+            if ((!targetAsgn.questions || targetAsgn.questions.length === 0) && Array.isArray(pa.questions) && pa.questions.length > 0) {
+              targetAsgn.questions = pa.questions;
+            }
+            if (pa.assignedStudentId && !targetAsgn.assignedStudentId) {
+              targetAsgn.assignedStudentId = pa.assignedStudentId;
+            }
+          }
+        });
+
+        console.log('[Supabase Cloud] Synchronized JSON state snapshot with preserved assessment questions!');
         return {
           ...db,
           ...parsed,
           users: combinedUsers,
           students: combinedStudents,
           teacherStudents: combinedTeacherStudents,
+          assignments: combinedAssignments,
           curricula: db.curricula.length > 0 ? db.curricula : (parsed.curricula || []),
           curriculumTopics: db.curriculumTopics.length > 0 ? db.curriculumTopics : (parsed.curriculumTopics || []),
           curriculumChunks: db.curriculumChunks.length > 0 ? db.curriculumChunks : (parsed.curriculumChunks || []),

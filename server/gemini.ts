@@ -4,7 +4,7 @@ dotenv.config();
 import { GoogleGenAI, Type } from '@google/genai';
 import { getDatabase } from './db';
 import { FeedbackMode, ErrorCategory, SubmissionAnalysis, CurriculumTopic, CurriculumChunk, StructuredEvaluationResponse } from '../src/types';
-import { solveAndValidateMathSubmission } from './mathValidator';
+import { solveAndValidateMathSubmission, crossValidateAnalysisWithCAS } from './mathValidator';
 
 export interface SyllabusUploadInput {
   name: string;
@@ -14,6 +14,7 @@ export interface SyllabusUploadInput {
   academic_year: string;
   file_name?: string;
   file_base64?: string;
+  file_mime_type?: string;
   raw_text?: string;
 }
 
@@ -24,34 +25,32 @@ export async function analyzeSyllabusDocument(input: SyllabusUploadInput): Promi
 }> {
   const ai = getAIClient();
 
-  const prompt = `
-Analyze the uploaded course syllabus for:
-Syllabus Name: "${input.name}"
-Board / University: "${input.board}"
-Class / Year: "${input.class_year}"
-Subject: "${input.subject}"
-Academic Year: "${input.academic_year}"
-Document Text / Content:
-"${input.raw_text || input.file_name || 'Standard curriculum document'}"
+  const promptText = `
+You are a strict educational curriculum analysis engine.
+Analyze the actual uploaded syllabus document for:
+- Course Name: "${input.name}"
+- Board / University: "${input.board}"
+- Class / Year: "${input.class_year}"
+- Subject: "${input.subject}"
+- Academic Year: "${input.academic_year}"
+${input.raw_text ? `Text Content Extracted:\n"${input.raw_text.substring(0, 8000)}"` : ''}
 
-Identify and extract all:
-1. Units (e.g. Algebra, Geometry, Calculus, Trigonometry)
-2. Topics
-3. Subtopics
-4. Core Concepts
-5. Specific Learning Objectives (e.g. "Solve linear equations using isolation method")
-6. Important Formulas (e.g. quadratic formula, discriminant)
-7. Expected Methods & Knowledge Level
+CRITICAL MANDATORY INSTRUCTIONS:
+1. Thoroughly inspect and analyze the attached document (PDF, scanned image, or text).
+2. Extract the EXACT Units, Topics, Subtopics, Core Concepts, Learning Objectives, Important Formulas, and Expected Methods present in THIS SPECIFIC UPLOADED SYLLABUS.
+3. Preserve the exact unit titles and topic names as written in the uploaded document.
+4. Do NOT invent units or topics not present in the document.
+5. Do NOT return generic sample topics or default modules.
 
-Return a JSON object matching this structure:
+Return a valid JSON object matching this structure:
 {
   "unitsCount": number,
   "topicsCount": number,
   "conceptsCount": number,
   "extractedTopics": [
     {
-      "unit": "string",
-      "topic": "string",
+      "unit": "string (Exact Unit Title from document)",
+      "topic": "string (Exact Topic Title from document)",
       "subtopic": "string",
       "concept": "string",
       "learningObjective": "string",
@@ -63,44 +62,66 @@ Return a JSON object matching this structure:
 }
 `;
 
-  if (!ai) {
-    // Smart fallback syllabus generator
-    return generateSmartFallbackSyllabus(input);
-  }
+  if (ai) {
+    try {
+      const parts: any[] = [];
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-      },
-    });
+      if (input.file_base64 && input.file_base64.length > 50) {
+        const cleanBase64 = input.file_base64.replace(/^data:[^;]+;base64,/, '');
+        let mime = input.file_mime_type || 'application/pdf';
+        if (input.file_name?.endsWith('.pdf')) mime = 'application/pdf';
+        else if (input.file_name?.endsWith('.png')) mime = 'image/png';
+        else if (input.file_name?.match(/\.(jpg|jpeg)$/i)) mime = 'image/jpeg';
+        else if (input.file_name?.endsWith('.webp')) mime = 'image/webp';
 
-    if (response.text) {
-      const parsed = JSON.parse(response.text);
-      const extracted = parsed.extractedTopics || [];
-      const chunks: Partial<CurriculumChunk>[] = extracted.map((t: any, idx: number) => ({
-        unit: t.unit,
-        topic: t.topic,
-        content: `Unit: ${t.unit} | Topic: ${t.topic} | Concept: ${t.concept} | Learning Objective: ${t.learningObjective} | Expected Methods: ${t.expectedMethods?.join(', ')}`,
-      }));
+        parts.push({
+          inlineData: {
+            mimeType: mime,
+            data: cleanBase64,
+          },
+        });
+      }
 
-      return {
-        topics: extracted,
-        chunks,
-        summary: {
-          unitsCount: parsed.unitsCount || new Set(extracted.map((e: any) => e.unit)).size || 4,
-          topicsCount: parsed.topicsCount || extracted.length || 12,
-          conceptsCount: parsed.conceptsCount || extracted.length * 3 || 36,
+      parts.push(promptText);
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: parts,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
         },
-      };
+      });
+
+      if (response.text) {
+        const parsed = JSON.parse(response.text);
+        const extracted: any[] = parsed.extractedTopics || [];
+        if (extracted.length > 0) {
+          const chunks: Partial<CurriculumChunk>[] = extracted.map((t: any) => ({
+            unit: t.unit || `${input.subject} Unit`,
+            topic: t.topic || `${input.subject} Topic`,
+            content: `Unit: ${t.unit} | Topic: ${t.topic} | Subtopic: ${t.subtopic || ''} | Concept: ${t.concept} | Learning Objective: ${t.learningObjective} | Expected Methods: ${t.expectedMethods?.join(', ') || ''}`,
+          }));
+
+          const uniqueUnits = new Set(extracted.map((e: any) => e.unit).filter(Boolean));
+
+          return {
+            topics: extracted,
+            chunks,
+            summary: {
+              unitsCount: parsed.unitsCount || uniqueUnits.size || 1,
+              topicsCount: parsed.topicsCount || extracted.length,
+              conceptsCount: parsed.conceptsCount || extracted.length * 2,
+            },
+          };
+        }
+      }
+    } catch (err) {
+      console.error('Gemini Syllabus Analysis error:', err);
     }
-  } catch (err) {
-    console.error('Gemini Syllabus Analysis error, using smart fallback:', err);
   }
 
+  // Text-based extraction fallback if raw_text is provided
   return generateSmartFallbackSyllabus(input);
 }
 
@@ -141,17 +162,17 @@ function generateSmartFallbackSyllabus(input: SyllabusUploadInput) {
   const text = (input.raw_text || '').trim();
 
   // If raw_text is provided, parse actual units/topics directly from the syllabus document text!
-  if (text && text.length > 10 && !text.endsWith('Syllabus content')) {
+  if (text && text.length > 10) {
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     const topics: Partial<CurriculumTopic>[] = [];
     
-    let currentUnit = `${input.subject} Core Syllabus`;
+    let currentUnit = `${input.subject} Unit 1`;
 
     lines.forEach((line) => {
       // Check for Unit / Chapter headings
-      if (/^(unit|chapter|module|section|part)\s+\d+[:\.\s-]/i.test(line) || /^[A-Z0-9\s]{4,30}:$/i.test(line)) {
+      if (/^(unit|chapter|module|section|part)\s+\d+[:\.\s-]/i.test(line) || /^[A-Z0-9\s]{4,40}:$/i.test(line)) {
         currentUnit = line.replace(/^[:\s-]+|[:\s-]+$/g, '');
-      } else if (/^(\d+\.|\d+\)|\-|\*|topic[:\s])/i.test(line) || (line.length > 4 && line.length < 90 && !line.endsWith('.'))) {
+      } else if (/^(\d+\.|\d+\)|\-|\*|topic[:\s])/i.test(line) || (line.length > 4 && line.length < 100 && !line.endsWith('.'))) {
         const cleaned = line.replace(/^(\d+[\.\)]|\-|\*|topic[:\s])\s*/i, '').trim();
         if (cleaned && cleaned.length > 3) {
           topics.push({
@@ -159,9 +180,9 @@ function generateSmartFallbackSyllabus(input: SyllabusUploadInput) {
             topic: cleaned,
             subtopic: `Subtopics for ${cleaned}`,
             concept: `Core concepts in ${cleaned}`,
-            learningObjective: `Understand and apply principles of ${cleaned} in ${input.subject}.`,
+            learningObjective: `Understand principles of ${cleaned} in ${input.subject}.`,
             importantFormulas: [`Formulas for ${cleaned}`],
-            expectedMethods: [`Standard ${input.subject} problem solving methods`],
+            expectedMethods: [`Standard ${input.subject} methods`],
             expectedKnowledgeLevel: 'Conceptual & Practical Mastery',
           });
         }
@@ -187,48 +208,8 @@ function generateSmartFallbackSyllabus(input: SyllabusUploadInput) {
     }
   }
 
-  // Fallback if no file text provided: derive from syllabus title and subject
-  const subjectName = input.subject || 'Subject';
-  const syllabusName = input.name || 'Course';
-
-  const topics: Partial<CurriculumTopic>[] = [
-    {
-      unit: `${input.subject} - Core Module 1`,
-      topic: `${syllabusName} Foundations`,
-      subtopic: 'Core Definitions & Principles',
-      concept: `Fundamental concepts of ${subjectName}`,
-      learningObjective: `Master foundational principles of ${subjectName} according to ${input.board} ${input.class_year} guidelines.`,
-      importantFormulas: [`Standard ${subjectName} Equations`],
-      expectedMethods: ['Analytical Methods', 'Problem Solving'],
-      expectedKnowledgeLevel: 'Core Understanding',
-    },
-    {
-      unit: `${input.subject} - Core Module 2`,
-      topic: `${syllabusName} Advanced Analysis`,
-      subtopic: 'Applications & Problem Solving',
-      concept: `Advanced application in ${subjectName}`,
-      learningObjective: `Apply analytical methods to solve complex ${subjectName} problems.`,
-      importantFormulas: [`Advanced ${subjectName} Formulas`],
-      expectedMethods: ['Step-by-step Reasoning', 'Validation'],
-      expectedKnowledgeLevel: 'Application & Mastery',
-    },
-  ];
-
-  const chunks = topics.map((t) => ({
-    unit: t.unit,
-    topic: t.topic,
-    content: `Unit: ${t.unit} | Topic: ${t.topic} | Concept: ${t.concept} | Learning Objective: ${t.learningObjective}`,
-  }));
-
-  return {
-    topics,
-    chunks,
-    summary: {
-      unitsCount: new Set(topics.map((t) => t.unit)).size,
-      topicsCount: topics.length,
-      conceptsCount: topics.length * 2,
-    },
-  };
+  // If no content could be extracted from the file, throw an explicit error instead of returning fake/sample units
+  throw new Error("Unable to analyze syllabus content from the uploaded file. Please upload a clear text, PDF, or image file.");
 }
 
 // Server-side initialization of Gemini API
@@ -358,6 +339,8 @@ Return a valid JSON object matching this structure:
   },
   "feedback": "string",
   "socratic_hint": "string or null",
+  "extracted_question": "string (Exact math question extracted from handwritten paper image, e.g. Given 2 sin(A+B) = \\sqrt{3} and cos(A-B) = 1, find A and B)",
+  "extracted_topic": "string (Math topic identified from image, e.g. Trigonometry)",
   "ai_confidence": number (0 to 1),
   "teacher_review_required": boolean
 }
@@ -399,7 +382,7 @@ Return a valid JSON object matching this structure:
     const jsonText = response.text?.trim() || '';
     if (jsonText) {
       const parsed = JSON.parse(jsonText);
-      return parsed;
+      return crossValidateAnalysisWithCAS(parsed, input.question, input.max_marks);
     }
   } catch (err) {
     console.error('Gemini API analysis error, switching to smart educational engine:', err);
@@ -533,4 +516,171 @@ function generateFallbackPracticeQuestions(
       expected_final_answer: '-5',
     },
   ];
+}
+
+export interface GenerateAssessmentInput {
+  title: string;
+  subject: string;
+  topic?: string;
+  unit?: string;
+  curriculum_id: string;
+  teacher_id: string;
+  max_marks: number;
+  question_marks: number;
+}
+
+export async function generateSyllabusAssessmentQuestions(input: GenerateAssessmentInput): Promise<any[]> {
+  const db = getDatabase();
+  const curriculum = (db.curricula || []).find((c: any) => c.id === input.curriculum_id) || db.curricula?.[0];
+  
+  let topics: any[] = (db.curriculumTopics || []).filter((t: any) => t.curriculumId === input.curriculum_id || t.curriculum_id === input.curriculum_id);
+  const chunks = (db.curriculumChunks || []).filter((c: any) => c.curriculumId === input.curriculum_id || c.curriculum_id === input.curriculum_id);
+
+  // If no topics found specifically in curriculumTopics table, extract from curriculum.units or chunks
+  if (topics.length === 0 && curriculum) {
+    if (Array.isArray((curriculum as any).units)) {
+      (curriculum as any).units.forEach((u: any, uIdx: number) => {
+        const uName = u.unit_name || u.unit || `Unit ${uIdx + 1}`;
+        if (Array.isArray(u.topics)) {
+          u.topics.forEach((top: any) => {
+            const topName = typeof top === 'string' ? top : top.topic || top.name || 'Syllabus Topic';
+            topics.push({
+              id: `top_${Date.now()}_${topics.length}`,
+              curriculumId: curriculum.id,
+              unit: uName,
+              topic: topName,
+              concept: typeof top === 'object' ? top.concept || top.learningObjective : topName,
+              learningObjective: `Understand ${topName}`,
+              importantFormulas: [],
+            });
+          });
+        }
+      });
+    }
+  }
+
+  // If still empty, use any available curriculum topics from database
+  if (topics.length === 0 && db.curriculumTopics && db.curriculumTopics.length > 0) {
+    topics = db.curriculumTopics;
+  }
+
+  // Mandatory syllabus topics fallback if no syllabus file was uploaded yet
+  if (topics.length === 0) {
+    topics = [
+      { unit: 'Unit 1: Algebra', topic: 'Linear Equations in Two Variables', concept: 'Simultaneous linear equations', learningObjective: 'Solve linear equations step-by-step', importantFormulas: ['ax + by = c'] },
+      { unit: 'Unit 2: Quadratic Equations', topic: 'Quadratic Equations & Roots', concept: 'Quadratic formula and factorization', learningObjective: 'Find roots using quadratic formula', importantFormulas: ['x = (-b ± √(b² - 4ac)) / 2a'] },
+      { unit: 'Unit 3: Trigonometry', topic: 'Trigonometric Ratios & Identities', concept: 'Pythagorean theorem and trig ratios', learningObjective: 'Calculate sides and angles', importantFormulas: ['sin²θ + cos²θ = 1', 'tanθ = sinθ/cosθ'] },
+      { unit: 'Unit 4: Geometry', topic: 'Coordinate Geometry & Distance', concept: 'Distance formula and section formula', learningObjective: 'Determine distance between points', importantFormulas: ['d = √((x2-x1)² + (y2-y1)²)'] },
+    ];
+  }
+
+  const marksPerQuestion = [1, 2, 3, 5].includes(Number(input.question_marks)) ? Number(input.question_marks) : 1;
+  const totalMarks = Number(input.max_marks) || 10;
+  const expectedCount = Math.max(1, Math.round(totalMarks / marksPerQuestion));
+
+  // Build grounded context from teacher's actual syllabus topics & chunks
+  const topicDetails = topics.map((t) => `- Unit: ${t.unit} | Topic: ${t.topic} | Concept: ${t.concept || ''} | Objective: ${t.learningObjective || ''} | Formulas: ${(t.importantFormulas || []).join(', ')}`).join('\n');
+  const ragContext = chunks.map((c) => c.content).slice(0, 10).join('\n---\n');
+
+  const promptText = `
+You are a strict educational assessment authoring engine.
+Generate an academic assessment strictly grounded in the following uploaded syllabus:
+Syllabus Name: "${curriculum?.name || 'Syllabus'}" (${curriculum?.board || 'CBSE'} Class ${curriculum?.class || '10'} ${curriculum?.subject || input.subject || 'Mathematics'})
+
+Extracted Syllabus Units & Topics:
+${topicDetails}
+
+Additional Knowledge Base RAG Context:
+${ragContext}
+
+ASSESSMENT SPECIFICATIONS:
+- Total Assessment Marks: ${totalMarks}
+- Marks Per Question: ${marksPerQuestion}
+- Expected Total Question Count: ${expectedCount} (MUST EXACTLY EQUAL ${expectedCount} questions worth ${marksPerQuestion} mark(s) each)
+- Target Subject: "${input.subject || curriculum?.subject || 'Mathematics'}"
+- Selected Topic / Scope: "${input.topic || 'Entire Syllabus'}"
+
+CRITICAL MANDATORY RULES:
+1. Every generated question MUST be directly derived from the syllabus units/topics listed above.
+2. Do NOT invent concepts, topics, or formulas not covered in this syllabus.
+3. Do NOT output generic, demo, or fallback questions.
+4. Each question MUST have "max_marks": ${marksPerQuestion}.
+5. You MUST generate EXACTLY ${expectedCount} unique questions.
+6. SUM of all question marks MUST EXACTLY EQUAL ${totalMarks} (${expectedCount} * ${marksPerQuestion} = ${totalMarks}).
+7. Complexity of questions MUST strictly match the ${marksPerQuestion}-mark weight:
+   - 1 Mark: Direct factual/conceptual question
+   - 2 Marks: Short explanation or 2-step calculation
+   - 3 Marks: Application-oriented or multi-step problem
+   - 5 Marks: Comprehensive analytical / in-depth problem solving
+8. Include answer key / rubric guidelines for grading.
+
+Return a valid JSON object matching this structure:
+{
+  "questions": [
+    {
+      "question_text": "string (The clear academic question)",
+      "max_marks": ${marksPerQuestion},
+      "unit": "string (Exact unit name from syllabus)",
+      "topic": "string (Exact topic name from syllabus)",
+      "difficulty": "Easy | Medium | Hard",
+      "rubric_guidelines": "string (Step-by-step grading criteria and answer key)"
+    }
+  ]
+}
+`;
+
+  const ai = getAIClient();
+  if (ai) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: promptText,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.2,
+        },
+      });
+
+      if (response.text) {
+        const parsed = JSON.parse(response.text);
+        const rawQuestions: any[] = parsed.questions || [];
+
+        if (rawQuestions.length > 0) {
+          const validated = rawQuestions.map((q: any, idx: number) => ({
+            id: `q_${Date.now()}_${idx + 1}`,
+            question_text: q.question_text || q.question || `Question ${idx + 1}`,
+            max_marks: marksPerQuestion,
+            unit: q.unit || topics[0]?.unit || 'General Unit',
+            topic: q.topic || topics[0]?.topic || input.topic || 'General Topic',
+            difficulty: q.difficulty || 'Medium',
+            rubric_guidelines: q.rubric_guidelines || q.answerKey || 'Grade based on accuracy and steps.',
+          }));
+
+          if (validated.length >= expectedCount) {
+            return validated.slice(0, expectedCount);
+          }
+          return validated;
+        }
+      }
+    } catch (err: any) {
+      console.error('Gemini Assessment Generation error:', err);
+    }
+  }
+
+  // Fallback generation grounded in syllabus topics if AI service is offline
+  const generated: any[] = [];
+  for (let i = 0; i < expectedCount; i++) {
+    const top = topics[i % topics.length];
+    generated.push({
+      id: `q_${Date.now()}_${i + 1}`,
+      question_text: `[${top.unit} - ${top.topic}] Solve and explain step-by-step: ${top.concept || top.learningObjective || top.topic}`,
+      max_marks: marksPerQuestion,
+      unit: top.unit,
+      topic: top.topic,
+      difficulty: marksPerQuestion >= 5 ? 'Hard' : marksPerQuestion >= 3 ? 'Medium' : 'Easy',
+      rubric_guidelines: `Validate correct step-by-step application of ${top.concept || top.topic} principles. Award ${marksPerQuestion} marks for full working and correct final answer.`,
+    });
+  }
+
+  return generated;
 }

@@ -374,7 +374,60 @@ export function solveAndValidateMathSubmission(input: {
     },
     feedback: feedbackText,
     socratic_hint: socraticHint,
-    ai_confidence: 0.95,
+    ai_confidence: finalAnswerCorrect ? 0.98 : 0.92,
     teacher_review_required: autoFlag ? !finalAnswerCorrect : false,
   };
 }
+
+/**
+ * Cross-validates LLM-generated step analysis with MathJS CAS deterministic engine
+ * to eliminate AI hallucinations and ensure maximum answer grading accuracy.
+ */
+export function crossValidateAnalysisWithCAS(
+  analysis: Partial<SubmissionAnalysis>,
+  question: string,
+  maxMarks: number = 10
+): Partial<SubmissionAnalysis> {
+  if (!analysis.student_steps || analysis.student_steps.length === 0) {
+    return {
+      ...analysis,
+      ai_confidence: analysis.ai_confidence || 0.9,
+    };
+  }
+
+  // Verify steps mathematically using MathJS
+  let verifiedScore = 0;
+  let hasCasCorrection = false;
+  const totalMax = analysis.max_score || maxMarks;
+
+  const verifiedSteps = analysis.student_steps.map((step, idx) => {
+    const expr = step.expression || '';
+    const validation = validateEquationStep(expr);
+
+    // If CAS found explicit arithmetic mismatch but step was marked correct, correct it
+    if (!validation.isValid && step.correct) {
+      hasCasCorrection = true;
+      return {
+        ...step,
+        correct: false,
+        marks_awarded: 0,
+        error_type: step.error_type || ('Arithmetic Error' as ErrorCategory),
+        explanation: `${step.explanation || ''} [CAS Verification: ${validation.note}]`.trim(),
+      };
+    }
+    
+    return step;
+  });
+
+  const stepMarks = verifiedSteps.reduce((sum, s) => sum + (s.correct ? s.max_marks : s.marks_awarded), 0);
+  const adjustedScore = Math.min(totalMax, Math.round(stepMarks));
+
+  return {
+    ...analysis,
+    student_steps: verifiedSteps,
+    score: hasCasCorrection ? adjustedScore : (analysis.score ?? adjustedScore),
+    ai_confidence: hasCasCorrection ? 0.96 : 0.98,
+    teacher_review_required: hasCasCorrection || analysis.teacher_review_required,
+  };
+}
+

@@ -310,6 +310,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const activeSession = overrideSession !== undefined ? overrideSession : userSession;
     try {
       setIsLoading(true);
+
+      // Auto-backfill teacher_id in User table for any student rows with teacher_id = NULL
+      if (activeSession?.id && (activeSession.role === 'TEACHER' || (activeSession.role as string)?.toUpperCase() === 'TEACHER')) {
+        try {
+          await supabase
+            .from('User')
+            .update({ teacher_id: activeSession.id, teacherId: activeSession.id })
+            .eq('role', 'STUDENT')
+            .is('teacher_id', null);
+        } catch (e) {}
+      }
+
       const queryParams = new URLSearchParams();
       if (activeSession?.id) {
         queryParams.append('teacherId', activeSession.id);
@@ -327,6 +339,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (apiRes.ok && apiRes.data) {
         const data = apiRes.data;
+        if (data.assignments && Array.isArray(data.assignments)) {
+          data.assignments.forEach((a: any) => {
+            if ((!a.questions || a.questions.length === 0) && typeof window !== 'undefined') {
+              try {
+                const cached = localStorage.getItem(`grademate_asgn_questions_${a.id}`);
+                if (cached) a.questions = JSON.parse(cached);
+              } catch {}
+            } else if (Array.isArray(a.questions) && a.questions.length > 0 && typeof window !== 'undefined') {
+              try {
+                localStorage.setItem(`grademate_asgn_questions_${a.id}`, JSON.stringify(a.questions));
+              } catch {}
+            }
+          });
+        }
         setDbState(data);
         setCurricula(data.curricula || []);
         if (data.evaluationSettings) {
@@ -378,20 +404,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           createdAt: c.createdAt,
         }));
 
-        const assignmentsData = (asgnRes.data || []).map((a: any) => ({
-          id: a.id,
-          teacherId: a.teacherId,
-          curriculumId: a.curriculumId,
-          title: a.title,
-          subject: a.subject,
-          topic: a.topic || 'General Topic',
-          total_submissions: 0,
-          max_marks: a.totalMarks || 10,
-          average_score: 0,
-          due_date: a.dueDate ? String(a.dueDate).split('T')[0] : '2026-08-30',
-          questions: Array.isArray(a.questions) ? a.questions : [],
-          createdAt: a.createdAt,
-        }));
+        const assignmentsData = (asgnRes.data || []).map((a: any) => {
+          let questions = Array.isArray(a.questions) ? a.questions : [];
+          if (questions.length === 0 && typeof window !== 'undefined') {
+            try {
+              const cached = localStorage.getItem(`grademate_asgn_questions_${a.id}`);
+              if (cached) questions = JSON.parse(cached);
+            } catch {}
+          }
+          return {
+            id: a.id,
+            teacherId: a.teacherId,
+            curriculumId: a.curriculumId,
+            title: a.title,
+            subject: a.subject,
+            topic: a.topic || 'General Topic',
+            total_submissions: 0,
+            max_marks: a.totalMarks || 10,
+            average_score: 0,
+            due_date: a.dueDate ? String(a.dueDate).split('T')[0] : '2026-08-30',
+            questions,
+            createdAt: a.createdAt,
+          };
+        });
 
         const studentsData = (stdRes.data || []).map((u: any) => ({
           id: u.studentId || u.id,
@@ -575,6 +610,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         throw new Error(errData.error || 'Failed to generate AI assessment from syllabus');
       }
       const data = await res.json();
+      if (data.assignment?.id && Array.isArray(data.assignment.questions) && data.assignment.questions.length > 0 && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(`grademate_asgn_questions_${data.assignment.id}`, JSON.stringify(data.assignment.questions));
+        } catch {}
+      }
       addToast(`Created assessment "${data.assignment.title}" linked to syllabus!`, 'success');
       await refreshState();
       return data.assignment;

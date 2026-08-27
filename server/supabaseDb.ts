@@ -1,5 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import { AppDatabase } from './db';
 
 dotenv.config();
@@ -301,6 +303,19 @@ export async function loadDatabaseFromSupabase(): Promise<AppDatabase> {
           }
         });
 
+        // Merge questions from local persistent JSON store if any questions are missing
+        try {
+          const storePath = path.join(process.cwd(), 'data', 'assessment_questions_store.json');
+          if (fs.existsSync(storePath)) {
+            const questionStore = JSON.parse(fs.readFileSync(storePath, 'utf8'));
+            combinedAssignments.forEach((a: any) => {
+              if ((!a.questions || a.questions.length === 0) && questionStore[a.id]) {
+                a.questions = questionStore[a.id];
+              }
+            });
+          }
+        } catch (e) {}
+
         console.log('[Supabase Cloud] Synchronized JSON state snapshot with preserved assessment questions!');
         return {
           ...db,
@@ -315,6 +330,19 @@ export async function loadDatabaseFromSupabase(): Promise<AppDatabase> {
         };
       }
     }
+
+    // Merge questions from local persistent JSON store for PostgreSQL fallback
+    try {
+      const storePath = path.join(process.cwd(), 'data', 'assessment_questions_store.json');
+      if (fs.existsSync(storePath)) {
+        const questionStore = JSON.parse(fs.readFileSync(storePath, 'utf8'));
+        (db.assignments || []).forEach((a: any) => {
+          if ((!a.questions || a.questions.length === 0) && questionStore[a.id]) {
+            a.questions = questionStore[a.id];
+          }
+        });
+      }
+    } catch (e) {}
 
     console.log('[Supabase Cloud] Hydrated all database entities from PostgreSQL tables!');
     return db;

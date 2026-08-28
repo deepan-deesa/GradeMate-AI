@@ -557,7 +557,7 @@ export const TeacherDashboard: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                students.slice(0, 5).map((student) => (
+                students.map((student) => (
                   <div
                     key={student.id}
                     onClick={() => {
@@ -567,7 +567,7 @@ export const TeacherDashboard: React.FC = () => {
                     className="p-3 rounded-xl bg-[#F4F2EC] border border-[#E0DED7] hover:border-[#2D4A3E] cursor-pointer transition-all flex items-center justify-between"
                   >
                     <div className="flex items-center space-x-3">
-                      <img src={student.avatar} alt={student.name} className="w-8 h-8 rounded-full object-cover border border-[#E0DED7]" />
+                      <img src={student.avatar || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250`} alt={student.name} className="w-8 h-8 rounded-full object-cover border border-[#E0DED7]" />
                       <div>
                         <div className="flex items-center space-x-1.5">
                           <div className="text-xs font-bold text-[#222521]">{student.name}</div>
@@ -577,11 +577,11 @@ export const TeacherDashboard: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-[#6E7269]">{student.common_error}</div>
+                        <div className="text-[10px] text-[#6E7269]">{student.email || student.common_error}</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-xs font-extrabold text-[#2D4A3E]">{student.overall_mastery}%</div>
+                      <div className="text-xs font-extrabold text-[#2D4A3E]">{student.overall_mastery || 0}%</div>
                       <div className="text-[10px] text-[#6E7269]">Mastery</div>
                     </div>
                   </div>

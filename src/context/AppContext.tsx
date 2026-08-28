@@ -372,11 +372,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Fallback: Query Supabase tables directly
         console.log('[GradeMate State] Loading directly from Supabase Cloud...');
         const teacherId = activeSession?.id;
+        // Query teacher-student relationships in Supabase Cloud
+        let teacherRelStudentIds: string[] = [];
+        if (activeSession?.role === 'TEACHER' && teacherId) {
+          try {
+            const [rel1, rel2] = await Promise.all([
+              supabase.from('TeacherStudent').select('studentId').eq('teacherId', teacherId),
+              supabase.from('teacher_students').select('student_id').eq('teacher_id', teacherId),
+            ]);
+            const ids1 = (rel1.data || []).map((r: any) => r.studentId).filter(Boolean);
+            const ids2 = (rel2.data || []).map((r: any) => r.student_id).filter(Boolean);
+            teacherRelStudentIds = Array.from(new Set([...ids1, ...ids2]));
+          } catch (e) {
+            console.error('[GradeMate] Error querying teacher_students mapping:', e);
+          }
+        }
+
         const [currRes, asgnRes, stdRes] = await Promise.all([
           teacherId ? supabase.from('Curriculum').select('*').eq('teacherId', teacherId) : supabase.from('Curriculum').select('*'),
           teacherId ? supabase.from('Assessment').select('*').eq('teacherId', teacherId) : supabase.from('Assessment').select('*'),
           (activeSession?.role === 'TEACHER' && teacherId)
-            ? supabase.from('User').select('*').eq('role', 'STUDENT').or(`teacherId.eq.${teacherId},teacher_id.eq.${teacherId}`)
+            ? (teacherRelStudentIds.length > 0
+                ? supabase.from('User').select('*').eq('role', 'STUDENT').or(`teacherId.eq.${teacherId},teacher_id.eq.${teacherId},id.in.(${teacherRelStudentIds.join(',')}),studentId.in.(${teacherRelStudentIds.join(',')})`)
+                : supabase.from('User').select('*').eq('role', 'STUDENT').or(`teacherId.eq.${teacherId},teacher_id.eq.${teacherId}`))
             : supabase.from('User').select('*').eq('role', 'STUDENT'),
         ]);
 

@@ -390,14 +390,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         let stdResData: any[] = [];
         if (activeSession?.role === 'TEACHER' && teacherId) {
-          const formattedIds = teacherRelStudentIds.map(id => `"${id}"`).join(',');
-          const filterStr = formattedIds.length > 0
-            ? `teacherId.eq."${teacherId}",teacher_id.eq."${teacherId}",id.in.(${formattedIds}),studentId.in.(${formattedIds})`
-            : `teacherId.eq."${teacherId}",teacher_id.eq."${teacherId}"`;
-          
-          const { data, error } = await supabase.from('User').select('*').eq('role', 'STUDENT').or(filterStr);
-          if (error) console.error('[GradeMate] Error fetching students in fallback:', error);
-          stdResData = data || [];
+          const { data: allStudents } = await supabase.from('User').select('*').eq('role', 'STUDENT');
+          const relSet = new Set(teacherRelStudentIds);
+          stdResData = (allStudents || []).filter((u: any) => {
+            const uId = u.id;
+            const sId = u.studentId;
+            const tId = u.teacherId || u.teacher_id;
+            return tId === teacherId || (uId && relSet.has(uId)) || (sId && relSet.has(sId));
+          });
         } else {
           const { data } = await supabase.from('User').select('*').eq('role', 'STUDENT');
           stdResData = data || [];

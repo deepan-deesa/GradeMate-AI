@@ -388,14 +388,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
-        const [currRes, asgnRes, stdRes] = await Promise.all([
+        let stdResData: any[] = [];
+        if (activeSession?.role === 'TEACHER' && teacherId) {
+          const formattedIds = teacherRelStudentIds.map(id => `"${id}"`).join(',');
+          const filterStr = formattedIds.length > 0
+            ? `teacherId.eq."${teacherId}",teacher_id.eq."${teacherId}",id.in.(${formattedIds}),studentId.in.(${formattedIds})`
+            : `teacherId.eq."${teacherId}",teacher_id.eq."${teacherId}"`;
+          
+          const { data, error } = await supabase.from('User').select('*').eq('role', 'STUDENT').or(filterStr);
+          if (error) console.error('[GradeMate] Error fetching students in fallback:', error);
+          stdResData = data || [];
+        } else {
+          const { data } = await supabase.from('User').select('*').eq('role', 'STUDENT');
+          stdResData = data || [];
+        }
+
+        const [currRes, asgnRes] = await Promise.all([
           teacherId ? supabase.from('Curriculum').select('*').eq('teacherId', teacherId) : supabase.from('Curriculum').select('*'),
           teacherId ? supabase.from('Assessment').select('*').eq('teacherId', teacherId) : supabase.from('Assessment').select('*'),
-          (activeSession?.role === 'TEACHER' && teacherId)
-            ? (teacherRelStudentIds.length > 0
-                ? supabase.from('User').select('*').eq('role', 'STUDENT').or(`teacherId.eq.${teacherId},teacher_id.eq.${teacherId},id.in.(${teacherRelStudentIds.join(',')}),studentId.in.(${teacherRelStudentIds.join(',')})`)
-                : supabase.from('User').select('*').eq('role', 'STUDENT').or(`teacherId.eq.${teacherId},teacher_id.eq.${teacherId}`))
-            : supabase.from('User').select('*').eq('role', 'STUDENT'),
         ]);
 
         const curriculaData = (currRes.data || []).map((c: any) => ({
@@ -440,7 +450,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           };
         });
 
-        const studentsData = (stdRes.data || []).map((u: any) => ({
+        const studentsData = (stdResData || []).map((u: any) => ({
           id: u.studentId || u.id,
           name: u.name,
           email: u.email,

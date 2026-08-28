@@ -106,39 +106,7 @@ export const StudentDashboard: React.FC = () => {
             {studentClass} • Overall Mastery: <strong className="text-emerald-400">{overallAccuracy !== null ? `${overallAccuracy}%` : 'No evaluations yet'}</strong>
           </p>
         </div>
-
-        <button
-          onClick={() => setActiveView('personalized_practice')}
-          className="px-5 py-3 bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-[#FFFFFF] font-bold rounded-2xl text-xs shadow-lg flex items-center justify-center space-x-2 transition-all shrink-0"
-        >
-          <Sparkles className="w-4 h-4 text-[#FFFFFF]" />
-          <span>Start Targeted Practice</span>
-        </button>
       </div>
-
-      {/* Practice Alert Banner */}
-      {activePracticeSet && (
-        <div className="p-5 rounded-3xl bg-amber-950/30 border border-amber-500/40 text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
-          <div className="flex items-start space-x-3">
-            <Target className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-extrabold text-sm text-[#FFFFFF]">Targeted Practice Assigned</h3>
-              <p className="text-xs text-amber-300 mt-0.5">
-                Topic: <strong className="text-[#FFFFFF]">{activePracticeSet.topic || activePracticeSet.target_concept}</strong> ({activePracticeSet.questions?.length || 0} questions)
-              </p>
-              <p className="text-[11px] text-slate-400 mt-1">{activePracticeSet.target_reason || activePracticeSet.reason_for_practice}</p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setActiveView('personalized_practice')}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center space-x-1 shrink-0"
-          >
-            <span>Solve Now</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* My Assigned Assessments Section */}
       {assignedAssessments.length > 0 && (

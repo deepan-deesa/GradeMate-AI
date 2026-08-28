@@ -3,24 +3,38 @@ import { useApp } from '../../context/AppContext';
 import { Target, Sparkles, CheckCircle2, XCircle, ArrowRight, HelpCircle, TrendingUp, Loader2, Award } from 'lucide-react';
 
 export const PersonalizedPracticeView: React.FC = () => {
-  const { activePracticeSet, submitPracticeAnswers, addToast, setActiveView } = useApp();
+  const { activePracticeSet, setActivePracticeSet, dbState, generateTargetedPractice, submitPracticeAnswers, addToast, setActiveView, role } = useApp();
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submittedResult, setSubmittedResult] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [activeHintIndex, setActiveHintIndex] = useState<number | null>(null);
 
-  if (!activePracticeSet) {
+  const practiceSets = dbState?.practiceSets || [];
+  const currentSet = activePracticeSet || (practiceSets.length > 0 ? practiceSets[0] : null);
+
+  if (!currentSet) {
     return (
-      <div className="p-12 text-center text-slate-400 bg-slate-950 min-h-screen flex flex-col items-center justify-center space-y-4">
-        <Target className="w-12 h-12 text-slate-600" />
-        <h3 className="text-lg font-bold text-white">No Active Practice Set</h3>
-        <p className="text-xs max-w-sm">Ask your teacher or click "Generate Targeted Practice" to start.</p>
+      <div className="p-12 text-center text-slate-400 bg-slate-950 min-h-screen flex flex-col items-center justify-center space-y-4 font-sans">
+        <Target className="w-12 h-12 text-blue-500 animate-bounce" />
+        <h3 className="text-lg font-bold text-white">No Active Targeted Practice Set</h3>
+        <p className="text-xs max-w-sm text-slate-400">
+          {role === 'TEACHER'
+            ? 'Select a student from the Student Portal and click "Generate Targeted Practice" to create a custom practice drill.'
+            : 'Ask your teacher or complete an assessment to generate your personalized remedial practice set.'}
+        </p>
+        <button
+          onClick={() => setActiveView(role === 'TEACHER' ? 'students' : 'student_dashboard')}
+          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all flex items-center space-x-2"
+        >
+          <Sparkles className="w-4 h-4" />
+          <span>{role === 'TEACHER' ? 'Go to Students & Generate Practice' : 'Back to Dashboard'}</span>
+        </button>
       </div>
     );
   }
 
-  const ps = activePracticeSet;
+  const ps = currentSet;
 
   const handleOptionSelect = (qId: string, option: string) => {
     setAnswers((prev) => ({ ...prev, [qId]: option }));
@@ -43,12 +57,29 @@ export const PersonalizedPracticeView: React.FC = () => {
     <div className="p-6 max-w-4xl mx-auto space-y-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
       {/* "Why am I practicing this?" Transparent Banner */}
       <div className="bg-gradient-to-r from-amber-950/60 to-purple-950/60 p-6 rounded-3xl border border-amber-500/40 shadow-xl space-y-3">
-        <div className="flex items-center space-x-2">
-          <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
-          <h1 className="text-xl font-extrabold text-white">Targeted Remedial Practice: {ps.topic}</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-2">
+            <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
+            <h1 className="text-xl font-extrabold text-white">Targeted Remedial Practice: {ps.topic || ps.target_concept}</h1>
+          </div>
+          <button
+            onClick={async () => {
+              try {
+                addToast('Generating new AI Remedial set...', 'info');
+                await generateTargetedPractice(ps.student_id || 'std_1', ps.topic || 'Linear Equations', ps.target_error_type || 'Sign Error');
+                addToast('New AI Remedial practice set ready!', 'success');
+              } catch (e) {
+                addToast('Failed to generate new practice set', 'error');
+              }
+            }}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center space-x-1.5 shadow-md transition-all shrink-0"
+          >
+            <Sparkles className="w-4 h-4 text-slate-950" />
+            <span>Generate Fresh AI Remedial Set</span>
+          </button>
         </div>
         <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300">
-          <strong className="text-amber-300">Why am I practicing this?</strong> {ps.target_reason}
+          <strong className="text-amber-300">Why am I practicing this?</strong> {ps.target_reason || ps.reason_for_practice}
         </div>
       </div>
 

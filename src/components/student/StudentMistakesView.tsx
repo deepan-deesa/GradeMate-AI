@@ -3,7 +3,8 @@ import { useApp } from '../../context/AppContext';
 import { AlertTriangle, Lightbulb, RefreshCw, Sparkles, ChevronRight } from 'lucide-react';
 
 export const StudentMistakesView: React.FC = () => {
-  const { dbState, userSession, selectedStudentId, setActiveView } = useApp();
+  const { dbState, userSession, selectedStudentId, setActiveView, generateTargetedPractice, addToast } = useApp();
+  const [generatingTopic, setGeneratingTopic] = React.useState<string | null>(null);
 
   const currentStudent = dbState?.students?.find(
     (s: any) =>
@@ -13,7 +14,7 @@ export const StudentMistakesView: React.FC = () => {
   );
 
   const studentName = userSession?.name || currentStudent?.name;
-  const studentId = userSession?.studentId || currentStudent?.id;
+  const studentId = userSession?.studentId || currentStudent?.id || 'std_1';
 
   const studentSubmissions = (dbState?.submissions || []).filter(
     (s: any) =>
@@ -36,6 +37,19 @@ export const StudentMistakesView: React.FC = () => {
         recommendation: 'Complete targeted practice questions on this concept.'
       };
     });
+
+  const handleGenerateRemedial = async (topic: string, errorType: string) => {
+    setGeneratingTopic(topic);
+    try {
+      await generateTargetedPractice(studentId, topic, errorType);
+      addToast(`Generated 5 AI Remedial questions for ${topic}!`, 'success');
+      setActiveView('personalized_practice');
+    } catch (e) {
+      addToast('Error generating AI remedial practice set', 'error');
+    } finally {
+      setGeneratingTopic(null);
+    }
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -94,6 +108,17 @@ export const StudentMistakesView: React.FC = () => {
                   <span>Socratic Guiding Hint:</span>
                 </div>
                 <p className="text-[#8C521F] font-medium pl-5">{m.socraticHint}</p>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={() => handleGenerateRemedial(m.topic, m.errorType)}
+                  disabled={generatingTopic === m.topic}
+                  className="px-3.5 py-2 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white rounded-xl text-xs font-bold flex items-center space-x-2 transition-all shadow-sm disabled:opacity-50"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{generatingTopic === m.topic ? 'Generating AI Remedial...' : 'Generate AI Remedial Practice'}</span>
+                </button>
               </div>
             </div>
           ))

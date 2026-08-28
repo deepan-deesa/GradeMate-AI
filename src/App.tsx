@@ -103,6 +103,9 @@ const MainContent: React.FC = () => {
         return <TeachingSimulatorView />;
       case 'practice_generator':
         return <PracticeGeneratorView />;
+      case 'personalized_practice':
+      case 'student_practice':
+        return <PersonalizedPracticeView />;
       default:
         return <TeacherDashboard />;
     }

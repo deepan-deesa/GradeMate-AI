@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { UserSquare2, AlertTriangle, CheckCircle2, TrendingUp, Target, Network, Sparkles, BookOpen, Eye, FileText, ChevronRight } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { UserSquare2, AlertTriangle, CheckCircle2, TrendingUp, Target, Network, Sparkles, BookOpen, Eye, FileText, ChevronRight, Award, ShieldCheck } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { StudentDashboard } from '../student/StudentDashboard';
 
 export const StudentProfileView: React.FC = () => {
@@ -37,11 +37,31 @@ export const StudentProfileView: React.FC = () => {
     (ps: any) => ps.student_id === student.id || ps.student_name?.toLowerCase() === student.name.toLowerCase()
   );
 
+  // Compute Student Performance Score matching Student Login calculation
+  const totalSubmissionsCount = studentSubmissions.length;
+  const totalScoreEarned = studentSubmissions.reduce((sum: number, s: any) => sum + (s.score || 0), 0);
+  const totalMaxMarks = studentSubmissions.reduce((sum: number, s: any) => sum + (s.max_score || 10), 0);
+  const studentPerformanceScore = totalMaxMarks > 0
+    ? Math.round((totalScoreEarned / totalMaxMarks) * 100)
+    : (student.overall_mastery ?? student.overallAccuracy ?? 78);
+
+  const performanceGraphData = studentSubmissions.length > 0
+    ? studentSubmissions.map((sub: any, i: number) => ({
+        task: `Task #${i + 1}`,
+        score: Math.round(((sub.score || 0) / (sub.max_score || 10)) * 100),
+        topic: sub.topic || 'Math Task',
+      }))
+    : (student.topic_mastery || []).map((tm: any) => ({
+        task: tm.topic,
+        score: tm.mastery_percentage,
+        topic: tm.topic,
+      }));
+
   const handleGeneratePracticeForStudent = async () => {
     try {
       await generateTargetedPractice(student.id, student.needs_improvement[0] || 'Sign Handling', student.common_error);
       setActiveView('personalized_practice');
-      addToast(`Generated practice for ${student.name}!`, 'success');
+      addToast(`Saved ${student.name} to AI Remedial & assigned extra performance assessment!`, 'success');
     } catch (e) {
       addToast('Error generating practice', 'error');
     }
@@ -88,7 +108,7 @@ export const StudentProfileView: React.FC = () => {
               )}
             </div>
             <p className="text-slate-400 text-xs mt-0.5">
-              Overall Mastery: <strong className="text-emerald-400">{student.overall_mastery}%</strong> • Status: {student.userStatus || student.learning_velocity}
+              Overall Mastery: <strong className="text-emerald-400">{studentPerformanceScore}%</strong> • Status: {student.userStatus || student.learning_velocity}
             </p>
           </div>
         </div>
@@ -111,18 +131,10 @@ export const StudentProfileView: React.FC = () => {
           >
             {students.map((s: any) => (
               <option key={s.id} value={s.id}>
-                {s.name} ({s.overall_mastery}% Mastery)
+                {s.name} ({studentPerformanceScore}% Performance Score)
               </option>
             ))}
           </select>
-
-          <button
-            onClick={handleGeneratePracticeForStudent}
-            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs shadow-lg flex items-center space-x-2"
-          >
-            <Target className="w-4 h-4" />
-            <span>Generate Targeted Practice</span>
-          </button>
         </div>
       </div>
 
@@ -172,6 +184,35 @@ export const StudentProfileView: React.FC = () => {
       {/* TAB CONTENT 1: Error DNA & Mastery Analytics */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
+          {/* Student Performance Score & Evaluation Trend Graph */}
+          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <TrendingUp className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h3 className="text-base font-bold text-white">Student Performance & Evaluation Score Trend</h3>
+                  <p className="text-xs text-slate-400">Score tracked across evaluated tasks (Synchronized with Student Login)</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black text-emerald-400">{studentPerformanceScore}%</span>
+                <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Overall Performance Score</span>
+              </div>
+            </div>
+
+            <div className="h-60 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={performanceGraphData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="task" stroke="#94a3b8" fontSize={11} />
+                  <YAxis domain={[0, 100]} stroke="#94a3b8" fontSize={11} />
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', borderRadius: '12px' }} />
+                  <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={3} dot={{ r: 6, fill: '#10b981' }} name="Performance Score %" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
           {/* Early Support Alert Card */}
           {student.early_support_alert && (
             <div className="p-5 rounded-3xl bg-rose-950/30 border border-rose-500/40 text-rose-200 flex items-start space-x-3 shadow-xl">

@@ -1798,7 +1798,7 @@ async function startServer() {
     }
   });
 
-  // Generate Targeted Practice
+  // Generate Targeted Practice & Auto-Assign Extra Remedial Assessment
   app.post('/api/practice/generate', async (req, res) => {
     try {
       const { student_id = 'std_1', concept = 'Sign Handling in Algebra', error_type = 'Sign Error' } = req.body;
@@ -1807,13 +1807,14 @@ async function startServer() {
 
       const questions = await generateTargetedPracticeAI(student.name, concept, error_type);
 
+      const practiceId = `prac_${Date.now()}`;
       const newPracticeSet: any = {
-        id: `prac_${Date.now()}`,
+        id: practiceId,
         student_id: student.id,
         student_name: student.name,
         target_concept: concept,
         target_error_type: error_type,
-        reason_for_practice: `Detected repeated ${error_type} patterns during recent assignments.`,
+        reason_for_practice: `Detected repeated ${error_type} patterns during recent assignments. Saved to AI Remedial Plan.`,
         created_at: new Date().toISOString(),
         status: 'Pending',
         before_accuracy: 48,
@@ -1824,9 +1825,76 @@ async function startServer() {
       };
 
       db.practiceSets.unshift(newPracticeSet);
+
+      // Auto-Create Extra Assessment for Student to Improve Performance
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 7);
+      const assessmentId = `asgn_remedial_${Date.now()}`;
+      const stdAny = student as any;
+
+      const newAssessment: any = {
+        id: assessmentId,
+        teacherId: stdAny.teacherId || stdAny.teacher_id || 'usr_teacher_demo',
+        teacher_id: stdAny.teacherId || stdAny.teacher_id || 'usr_teacher_demo',
+        curriculumId: stdAny.curriculumId || 'curr_cbse_10_math',
+        assignedStudentId: student.id,
+        assigned_student_id: student.id,
+        title: `AI Remedial: ${concept}`,
+        subject: 'Mathematics',
+        topic: concept,
+        max_marks: 10,
+        due_date: dueDate.toISOString().split('T')[0],
+        questions: newPracticeSet.questions,
+        createdAt: new Date().toISOString(),
+      };
+
+      db.assignments.unshift(newAssessment);
+
+      // Save to Student Profile (Interventions & Remedial Tracking)
+      if (stdAny) {
+        if (!Array.isArray(stdAny.interventions)) {
+          stdAny.interventions = [];
+        }
+        stdAny.interventions.unshift({
+          id: `inv_${Date.now()}`,
+          student_id: student.id,
+          student_name: student.name,
+          concept,
+          error_type,
+          status: 'Assigned',
+          date: new Date().toISOString().split('T')[0],
+          assessment_id: assessmentId,
+          practice_set_id: practiceId,
+        });
+
+        if (!Array.isArray(stdAny.assigned_remedial_sets)) {
+          stdAny.assigned_remedial_sets = [];
+        }
+        stdAny.assigned_remedial_sets.unshift(practiceId);
+      }
+
       await saveDatabaseAsync(db);
 
-      res.json({ success: true, practiceSet: newPracticeSet });
+      // Also Sync Assessment to Supabase PostgreSQL table
+      try {
+        const supabase = getSupabaseClient();
+        await supabase.from('Assessment').upsert({
+          id: assessmentId,
+          teacherId: stdAny.teacherId || stdAny.teacher_id || 'usr_teacher_demo',
+          curriculumId: stdAny.curriculumId || 'curr_cbse_10_math',
+          assignedStudentId: student.id,
+          title: `AI Remedial: ${concept}`,
+          subject: 'Mathematics',
+          topic: concept,
+          totalMarks: 10,
+          dueDate: dueDate.toISOString(),
+          createdAt: new Date().toISOString(),
+        });
+      } catch (e) {}
+
+      console.log(`[AI Remedial Success] Saved practice set & assigned extra assessment "${newAssessment.title}" for student ${student.name}`);
+
+      res.json({ success: true, practiceSet: newPracticeSet, assignment: newAssessment });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to generate practice', details: err.message });
     }

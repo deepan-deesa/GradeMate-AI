@@ -219,17 +219,29 @@ export const TeacherDashboard: React.FC = () => {
               });
             }
 
-            // Also insert relationship rows
-            await supabase.from('TeacherStudent').upsert({
-              id: `ts_${currentTeacherId}_${stdId}`,
-              teacherId: currentTeacherId,
-              studentId: stdId,
-            });
-            await supabase.from('teacher_students').upsert({
-              id: `ts_${currentTeacherId}_${stdId}`,
-              teacher_id: currentTeacherId,
-              student_id: stdId,
-            });
+            // Also insert relationship rows for both userId and stdId
+            await Promise.all([
+              supabase.from('TeacherStudent').upsert({
+                id: `ts_${currentTeacherId}_${userId}`,
+                teacherId: currentTeacherId,
+                studentId: userId,
+              }),
+              supabase.from('TeacherStudent').upsert({
+                id: `ts_${currentTeacherId}_${stdId}`,
+                teacherId: currentTeacherId,
+                studentId: stdId,
+              }),
+              supabase.from('teacher_students').upsert({
+                id: `ts_${currentTeacherId}_${userId}`,
+                teacher_id: currentTeacherId,
+                student_id: userId,
+              }),
+              supabase.from('teacher_students').upsert({
+                id: `ts_${currentTeacherId}_${stdId}`,
+                teacher_id: currentTeacherId,
+                student_id: stdId,
+              }),
+            ]);
             success = true;
           }
         } catch (dbErr: any) {

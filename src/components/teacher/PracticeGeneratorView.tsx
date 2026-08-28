@@ -23,29 +23,29 @@ export const PracticeGeneratorView: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
-      <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
+    <div className="p-6 max-w-5xl mx-auto space-y-8 bg-[#FDFCF8] min-h-screen text-[#222521] font-sans">
+      <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm">
         <div className="flex items-center space-x-3">
-          <div className="p-3 bg-blue-600/20 text-blue-400 rounded-2xl border border-blue-500/30">
+          <div className="p-3 bg-[#2D4A3E]/10 text-[#2D4A3E] rounded-2xl border border-[#C2D4C1]">
             <BookPlus className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Automatic Remedial Assignment Generator</h1>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <h1 className="text-2xl font-black text-[#222521]">Automatic Remedial Assignment Generator</h1>
+            <p className="text-[#545850] text-xs mt-0.5 font-medium">
               Auto-generate customized practice problem sets targeting specific class-wide misconceptions.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
+      <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm space-y-4">
         <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1">Target Topic / Misconception</label>
+          <label className="block text-xs font-bold text-[#222521] mb-1">Target Topic / Misconception</label>
           <input
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500"
+            className="w-full bg-[#FDFCF8] border border-[#E0DED7] rounded-2xl px-4 py-3 text-sm text-[#222521] focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
             placeholder="e.g. Fraction Denominator Simplification"
           />
         </div>
@@ -53,32 +53,32 @@ export const PracticeGeneratorView: React.FC = () => {
         <button
           onClick={handleGenerate}
           disabled={loading}
-          className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl text-xs shadow-lg flex items-center justify-center space-x-2 transition-all"
+          className="w-full py-3.5 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white font-bold rounded-2xl text-xs shadow-xs flex items-center justify-center space-x-2 transition-all"
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-amber-300" />}
           <span>Generate 5 Target Questions & Assign to Class</span>
         </button>
       </div>
 
       {generatedAssignment && (
-        <div className="bg-slate-900 p-6 rounded-3xl border border-blue-500/40 shadow-xl space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <h3 className="font-bold text-white text-base">{generatedAssignment.title}</h3>
-            <span className="text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+        <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#C2D4C1] shadow-md space-y-6">
+          <div className="flex items-center justify-between border-b border-[#E0DED7] pb-3">
+            <h3 className="font-bold text-[#222521] text-base">{generatedAssignment.title}</h3>
+            <span className="text-xs text-[#1E3A2B] font-bold bg-[#EAF0E8] px-2.5 py-1 rounded-full border border-[#C2D4C1]">
               Assigned to {generatedAssignment.assigned_students_count || 8} Students
             </span>
           </div>
 
           <div className="space-y-3">
             {generatedAssignment.questions.map((q: any, i: number) => (
-              <div key={i} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-1">
-                <div className="flex items-center justify-between text-xs text-slate-400 font-semibold">
+              <div key={i} className="p-4 rounded-2xl bg-[#FDFCF8] border border-[#E0DED7] space-y-1">
+                <div className="flex items-center justify-between text-xs text-[#6E7269] font-bold">
                   <span>Question {i + 1}</span>
-                  <span className="text-blue-400 font-bold">{q.difficulty || 'Medium'}</span>
+                  <span className="text-[#2D4A3E] font-black">{q.difficulty || 'Medium'}</span>
                 </div>
-                <div className="font-mono text-sm text-white font-bold">{q.question_text}</div>
-                <div className="text-xs text-slate-400 italic">Correct Answer: {q.correct_answer}</div>
-                <p className="text-[11px] text-slate-400">{q.explanation}</p>
+                <div className="font-mono text-sm text-[#222521] font-bold">{q.question_text}</div>
+                <div className="text-xs text-[#8C521F] italic font-semibold">Correct Answer: {q.correct_answer}</div>
+                <p className="text-[11px] text-[#545850]">{q.explanation}</p>
               </div>
             ))}
           </div>

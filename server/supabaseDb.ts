@@ -49,6 +49,7 @@ export function getEmptyDatabase(): AppDatabase {
     nextBestActions: [],
     interventions: [],
     practiceSets: [],
+    questionPapers: [],
     invitations: [],
     otpRequests: [],
     classStats: {

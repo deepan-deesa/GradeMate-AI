@@ -5,6 +5,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { getDatabase } from './db';
 import { FeedbackMode, ErrorCategory, SubmissionAnalysis, CurriculumTopic, CurriculumChunk, StructuredEvaluationResponse } from '../src/types';
 import { solveAndValidateMathSubmission, crossValidateAnalysisWithCAS } from './mathValidator';
+import { processAnswerSheetImage } from './ocrProcessor';
 
 export interface SyllabusUploadInput {
   name: string;
@@ -347,8 +348,8 @@ Return a valid JSON object matching this structure:
 `;
 
   if (!ai) {
-    // Fallback response generator if API key is not yet configured or in offline mode
-    return generateSmartFallbackAnalysis(input);
+    // Fallback response generator using real Tesseract OCR engine
+    return await generateSmartFallbackAnalysis(input);
   }
 
   try {
@@ -366,7 +367,14 @@ Return a valid JSON object matching this structure:
     }
 
     parts.push({
-      text: `Analyze this handwritten student math work for question: ${input.question}. Student Name: ${input.student_name}. Max Marks: ${input.max_marks}. Mode: ${input.feedback_mode}.`,
+      text: `MANDATORY VISION OCR & GRADING TASK:
+1. Examine the attached handwritten answer sheet image carefully.
+2. OCR read and transcribe EVERY single handwritten mathematical expression, step line, and equation EXACTLY as written on the paper by student (${input.student_name}).
+3. Extract the exact question/problem statement from the paper into "extracted_question". If no question is written, use "${input.question || 'Handwritten Answer Sheet Solution'}".
+4. Extract the main math topic from the paper into "extracted_topic".
+5. In "student_steps", list EACH transcribed handwritten line as a step object with its exact expression ("expression"), whether it is mathematically valid ("correct"), marks awarded, max marks for step, error category if invalid, and line explanation.
+6. Do NOT invent generic linear equations like 2x + 5 = 15 unless that exact text is written on the page!
+Target Subject: "${input.subject || 'Mathematics'}". Max Marks: ${input.max_marks}. Feedback Mode: "${input.feedback_mode}".`,
     });
 
     const response = await ai.models.generateContent({
@@ -388,7 +396,7 @@ Return a valid JSON object matching this structure:
     console.error('Gemini API analysis error, switching to smart educational engine:', err);
   }
 
-  return generateSmartFallbackAnalysis(input);
+  return await generateSmartFallbackAnalysis(input);
 }
 
 export async function generateTargetedPracticeAI(
@@ -448,15 +456,36 @@ export async function generateTargetedPracticeAI(
 }
 
 // Fallback generators to ensure 100% working app experience anytime
-function generateSmartFallbackAnalysis(input: AnalyzeInput): Partial<SubmissionAnalysis> {
-  return solveAndValidateMathSubmission({
-    question: input.question,
-    topic: input.topic,
+async function generateSmartFallbackAnalysis(input: AnalyzeInput): Promise<Partial<SubmissionAnalysis>> {
+  let extractedOcr: any = null;
+  if (input.image_base64 && input.image_base64.length > 50) {
+    try {
+      extractedOcr = await processAnswerSheetImage(input.image_base64, input.topic);
+    } catch (e) {}
+  }
+
+  const rawSteps = extractedOcr?.student_steps?.map((s: any) => s.expression) || [];
+  const questionText = extractedOcr?.extracted_question || input.question || 'Handwritten Student Answer Sheet Solution';
+  const topicText = extractedOcr?.extracted_topic || input.topic || 'Surface Areas and Volumes';
+
+  const solved = solveAndValidateMathSubmission({
+    question: questionText,
+    topic: topicText,
     max_marks: input.max_marks,
     student_name: input.student_name,
     feedback_mode: input.feedback_mode,
     image_base64: input.image_base64,
+    raw_steps: rawSteps,
   });
+
+  return {
+    ...solved,
+    extracted_question: questionText,
+    extracted_topic: topicText,
+    student_steps: (extractedOcr?.student_steps && extractedOcr.student_steps.length > 0)
+      ? extractedOcr.student_steps
+      : solved.student_steps,
+  };
 }
 
 function generateFallbackPracticeQuestions(

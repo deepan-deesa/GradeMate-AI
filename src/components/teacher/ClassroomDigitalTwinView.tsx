@@ -8,15 +8,15 @@ export const ClassroomDigitalTwinView: React.FC = () => {
   const students = dbState?.students || [];
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
-      <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
+    <div className="p-6 max-w-6xl mx-auto space-y-8 bg-[#FDFCF8] min-h-screen text-[#222521] font-sans">
+      <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm">
         <div className="flex items-center space-x-3">
-          <div className="p-3 bg-indigo-600/20 text-indigo-400 rounded-2xl border border-indigo-500/30">
+          <div className="p-3 bg-[#2D4A3E]/10 text-[#2D4A3E] rounded-2xl border border-[#C2D4C1]">
             <Network className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Classroom Digital Twin & State Matrix</h1>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <h1 className="text-2xl font-black text-[#222521]">Classroom Digital Twin & State Matrix</h1>
+            <p className="text-[#545850] text-xs mt-0.5 font-medium">
               Live mathematical state representation mapping student mastery, active misconceptions, and intervention status.
             </p>
           </div>
@@ -24,7 +24,7 @@ export const ClassroomDigitalTwinView: React.FC = () => {
       </div>
 
       {students.length === 0 ? (
-        <div className="p-8 rounded-3xl bg-slate-900 border border-slate-800 text-center text-slate-400 font-medium">
+        <div className="p-8 rounded-3xl bg-[#FFFFFF] border border-[#E0DED7] text-center text-[#6E7269] font-medium">
           No active students found in your class. Add students from the Teacher Dashboard to generate digital twin models.
         </div>
       ) : (
@@ -36,31 +36,31 @@ export const ClassroomDigitalTwinView: React.FC = () => {
               setSelectedStudentId(student.id);
               setActiveView('student_profile');
             }}
-            className="p-5 rounded-3xl bg-slate-900 border border-slate-800 hover:border-blue-500 cursor-pointer transition-all space-y-3 shadow-lg group"
+            className="p-5 rounded-3xl bg-[#FFFFFF] border border-[#E0DED7] hover:border-[#2D4A3E] cursor-pointer transition-all space-y-3 shadow-xs group"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <img src={student.avatar} alt={student.name} className="w-10 h-10 rounded-full object-cover border border-slate-700" />
+                <img src={student.avatar} alt={student.name} className="w-10 h-10 rounded-full object-cover border border-[#E0DED7]" />
                 <div>
-                  <h3 className="font-bold text-white text-sm group-hover:text-blue-300">{student.name}</h3>
-                  <span className="text-[10px] text-slate-400 font-mono">ID: {student.id}</span>
+                  <h3 className="font-bold text-[#222521] text-sm group-hover:text-[#2D4A3E]">{student.name}</h3>
+                  <span className="text-[10px] text-[#6E7269] font-mono">ID: {student.id}</span>
                 </div>
               </div>
-              <span className={`text-xs font-extrabold px-2.5 py-1 rounded-full ${
-                student.overall_mastery >= 80 ? 'bg-emerald-500/20 text-emerald-300' : student.overall_mastery >= 65 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
+              <span className={`text-xs font-black px-2.5 py-1 rounded-full ${
+                student.overall_mastery >= 80 ? 'bg-[#EAF0E8] text-[#1E3A2B] border border-[#C2D4C1]' : student.overall_mastery >= 65 ? 'bg-[#FAF0E6] text-[#8C521F] border border-[#E8CEB5]' : 'bg-[#FDF0EE] text-[#8C2B22] border border-[#ECC4C1]'
               }`}>
                 {student.overall_mastery}%
               </span>
             </div>
 
-            <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Active Learning Gap</span>
-              <p className="text-slate-200 font-semibold">{student.common_error}</p>
+            <div className="p-3 rounded-2xl bg-[#FDFCF8] border border-[#E0DED7] text-xs space-y-1">
+              <span className="text-[10px] font-bold text-[#6E7269] uppercase tracking-wider block">Active Learning Gap</span>
+              <p className="text-[#222521] font-semibold">{student.common_error}</p>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-              <span>Velocity: <strong className="text-slate-200">{student.learning_velocity}</strong></span>
-              <span className="text-blue-400 font-bold group-hover:translate-x-1 transition-transform">Inspect Profile →</span>
+            <div className="flex items-center justify-between text-[11px] text-[#6E7269] pt-1">
+              <span>Velocity: <strong className="text-[#222521]">{student.learning_velocity}</strong></span>
+              <span className="text-[#2D4A3E] font-bold group-hover:translate-x-1 transition-transform">Inspect Profile →</span>
             </div>
           </div>
         ))}

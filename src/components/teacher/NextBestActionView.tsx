@@ -18,15 +18,15 @@ export const NextBestActionView: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8 bg-slate-950 min-h-screen text-slate-100 font-sans">
-      <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
+    <div className="p-6 max-w-5xl mx-auto space-y-8 bg-[#FDFCF8] min-h-screen text-[#222521] font-sans">
+      <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm">
         <div className="flex items-center space-x-3">
-          <div className="p-3 bg-amber-600/20 text-amber-400 rounded-2xl border border-amber-500/30">
+          <div className="p-3 bg-[#FAF0E6] text-[#C88A58] rounded-2xl border border-[#E8CEB5]">
             <Zap className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Next Best Teaching Actions</h1>
-            <p className="text-slate-400 text-xs mt-0.5">
+            <h1 className="text-2xl font-black text-[#222521]">Next Best Teaching Actions</h1>
+            <p className="text-[#545850] text-xs mt-0.5 font-medium">
               What should I teach or revise next? Evidence-backed decision support based on student submission data.
             </p>
           </div>
@@ -37,48 +37,48 @@ export const NextBestActionView: React.FC = () => {
         {actions.map((act: any) => (
           <div
             key={act.id}
-            className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4 hover:border-slate-700 transition-all"
+            className="p-6 rounded-3xl bg-[#FFFFFF] border border-[#E0DED7] shadow-sm space-y-4 hover:border-[#2D4A3E]/40 transition-all"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E0DED7] pb-3">
               <div className="flex items-center space-x-2">
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                  act.priority === 'High' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-amber-500/20 text-amber-300'
+                  act.priority === 'High' ? 'bg-[#FDF0EE] text-[#8C2B22] border border-[#ECC4C1]' : 'bg-[#FAF0E6] text-[#8C521F] border border-[#E8CEB5]'
                 }`}>
                   {act.priority} Priority Action
                 </span>
-                <span className="text-xs text-slate-400 font-semibold">• Topic: {act.related_topic}</span>
+                <span className="text-xs text-[#6E7269] font-medium">• Topic: {act.related_topic}</span>
               </div>
-              <span className="text-xs text-blue-400 font-bold">{act.affected_students_count} Students Affected</span>
+              <span className="text-xs text-[#2D4A3E] font-black">{act.affected_students_count} Students Affected</span>
             </div>
 
             <div>
-              <h3 className="text-lg font-extrabold text-white mb-2">{act.action_title}</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">{act.reason}</p>
+              <h3 className="text-lg font-black text-[#222521] mb-2">{act.action_title}</h3>
+              <p className="text-xs text-[#545850] leading-relaxed">{act.reason}</p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2">
+            <div className="p-4 rounded-2xl bg-[#FDFCF8] border border-[#E0DED7] text-xs space-y-2">
               <div>
-                <strong className="text-slate-200">Data Evidence:</strong>{' '}
-                <span className="text-slate-400">{act.evidence}</span>
+                <strong className="text-[#222521]">Data Evidence:</strong>{' '}
+                <span className="text-[#545850]">{act.evidence}</span>
               </div>
               <div>
-                <strong className="text-blue-400">Suggested Action:</strong>{' '}
-                <span className="text-slate-300 font-medium">{act.suggested_action}</span>
+                <strong className="text-[#2D4A3E]">Suggested Action:</strong>{' '}
+                <span className="text-[#222521] font-bold">{act.suggested_action}</span>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <div className="text-xs text-slate-400">
+              <div className="text-xs text-[#6E7269]">
                 <span>Affected students: </span>
-                <span className="text-slate-200 font-medium">{act.affected_students_names.join(', ')}</span>
+                <span className="text-[#222521] font-bold">{act.affected_students_names.join(', ')}</span>
               </div>
 
               <button
                 onClick={() => handleExecute(act)}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl text-xs shadow-lg flex items-center space-x-2 transition-all"
+                className="px-5 py-2.5 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-white font-bold rounded-2xl text-xs shadow-xs flex items-center space-x-2 transition-all"
               >
                 <span>Execute Recommendation</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 text-amber-300" />
               </button>
             </div>
           </div>

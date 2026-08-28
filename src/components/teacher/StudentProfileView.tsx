@@ -1,7 +1,32 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { UserSquare2, AlertTriangle, CheckCircle2, TrendingUp, Target, Network, Sparkles, BookOpen, Eye, FileText, ChevronRight, Award, ShieldCheck } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import {
+  UserSquare2,
+  AlertTriangle,
+  CheckCircle2,
+  TrendingUp,
+  Target,
+  Network,
+  Sparkles,
+  BookOpen,
+  Eye,
+  FileText,
+  ChevronRight,
+  Award,
+  ShieldCheck,
+} from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Cell,
+} from 'recharts';
 import { StudentDashboard } from '../student/StudentDashboard';
 
 export const StudentProfileView: React.FC = () => {
@@ -12,7 +37,7 @@ export const StudentProfileView: React.FC = () => {
   const students = dbState?.students || [];
   if (students.length === 0) {
     return (
-      <div className="p-12 text-center text-slate-400 font-medium bg-slate-900 rounded-3xl border border-slate-800 m-6">
+      <div className="p-12 text-center text-[#6E7269] font-medium bg-[#FFFFFF] rounded-3xl border border-[#E0DED7] m-6 shadow-sm">
         No students assigned to your class yet.
       </div>
     );
@@ -22,9 +47,9 @@ export const StudentProfileView: React.FC = () => {
 
   if (!student) {
     return (
-      <div className="p-12 text-center bg-red-950/40 border border-red-800 rounded-3xl m-6">
-        <h2 className="text-xl font-bold text-red-300">Unauthorized / Access Denied</h2>
-        <p className="text-xs text-red-400 mt-2">You do not have authorization to view this student profile.</p>
+      <div className="p-12 text-center bg-[#FDF0EE] border border-[#ECC4C1] rounded-3xl m-6">
+        <h2 className="text-xl font-bold text-[#8C2B22]">Unauthorized / Access Denied</h2>
+        <p className="text-xs text-[#8C2B22] mt-2">You do not have authorization to view this student profile.</p>
       </div>
     );
   }
@@ -57,16 +82,6 @@ export const StudentProfileView: React.FC = () => {
         topic: tm.topic,
       }));
 
-  const handleGeneratePracticeForStudent = async () => {
-    try {
-      await generateTargetedPractice(student.id, student.needs_improvement[0] || 'Sign Handling', student.common_error);
-      setActiveView('personalized_practice');
-      addToast(`Saved ${student.name} to AI Remedial & assigned extra performance assessment!`, 'success');
-    } catch (e) {
-      addToast('Error generating practice', 'error');
-    }
-  };
-
   const handleResendInvite = async () => {
     try {
       const res = await fetch('/api/invitations/resend', {
@@ -90,25 +105,25 @@ export const StudentProfileView: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 bg-slate-950 min-h-screen text-slate-100 font-sans">
+    <div className="p-6 max-w-6xl mx-auto space-y-6 bg-[#FDFCF8] min-h-screen text-[#222521] font-sans">
       {/* Student Selector Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm">
         <div className="flex items-center space-x-4">
-          <img src={student.avatar} alt={student.name} className="w-16 h-16 rounded-2xl object-cover border-2 border-blue-500/50 shadow-md" />
+          <img src={student.avatar} alt={student.name} className="w-16 h-16 rounded-2xl object-cover border-2 border-[#2D4A3E]/30 shadow-xs" />
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-2xl font-bold text-white">{student.name}</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold">
-                {student.grade_level}
+              <h1 className="text-2xl font-black text-[#222521]">{student.name}</h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-[#EAF0E8] text-[#1E3A2B] border border-[#C2D4C1] text-xs font-bold">
+                {student.grade_level || 'Grade 10'}
               </span>
               {(student.isRegistered === false || student.userStatus === 'Unregistered User ID' || student.learning_velocity === 'Unregistered User ID') && (
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-extrabold flex items-center space-x-1">
-                  <span>⚠️ Unregistered User ID</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-[#FAF0E6] text-[#8C521F] border border-[#E8CEB5] text-xs font-extrabold flex items-center space-x-1">
+                  <span>⚠️ Unregistered ID</span>
                 </span>
               )}
             </div>
-            <p className="text-slate-400 text-xs mt-0.5">
-              Overall Mastery: <strong className="text-emerald-400">{studentPerformanceScore}%</strong> • Status: {student.userStatus || student.learning_velocity}
+            <p className="text-[#545850] text-xs mt-0.5">
+              Overall Performance Score: <strong className="text-[#2D4A3E] font-black">{studentPerformanceScore}%</strong> • Status: {student.userStatus || student.learning_velocity}
             </p>
           </div>
         </div>
@@ -117,17 +132,17 @@ export const StudentProfileView: React.FC = () => {
           {(student.isRegistered === false || student.userStatus === 'Unregistered User ID' || student.learning_velocity === 'Unregistered User ID') && (
             <button
               onClick={handleResendInvite}
-              className="px-3.5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl font-bold text-xs flex items-center space-x-1.5 transition-all"
+              className="px-3.5 py-2 bg-[#FAF0E6] hover:bg-[#E8CEB5] text-[#8C521F] border border-[#E8CEB5] rounded-xl font-bold text-xs flex items-center space-x-1.5 transition-all shadow-xs"
             >
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Copy Invitation Link</span>
+              <Sparkles className="w-4 h-4 text-[#C88A58]" />
+              <span>Copy Invite Link</span>
             </button>
           )}
 
           <select
             value={selectedStudentId}
             onChange={(e) => setSelectedStudentId(e.target.value)}
-            className="bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none"
+            className="bg-[#FDFCF8] border border-[#E0DED7] rounded-xl px-3.5 py-2 text-xs font-bold text-[#222521] focus:outline-none focus:ring-2 focus:ring-[#2D4A3E]"
           >
             {students.map((s: any) => (
               <option key={s.id} value={s.id}>
@@ -138,22 +153,22 @@ export const StudentProfileView: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation Tabs (Connected Analysis & Student View Preview) */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-2">
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-[#E0DED7] pb-2">
         <button
           onClick={() => setActiveTab('analytics')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-            activeTab === 'analytics' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:bg-slate-900'
+            activeTab === 'analytics' ? 'bg-[#2D4A3E] text-[#FDFCF8] shadow-sm' : 'bg-[#FFFFFF] text-[#6E7269] hover:bg-[#FAF0E6]'
           }`}
         >
           <TrendingUp className="w-4 h-4" />
-          <span>Error DNA & Mastery</span>
+          <span>Performance & Error DNA</span>
         </button>
 
         <button
           onClick={() => setActiveTab('submissions')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-            activeTab === 'submissions' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:bg-slate-900'
+            activeTab === 'submissions' ? 'bg-[#2D4A3E] text-[#FDFCF8] shadow-sm' : 'bg-[#FFFFFF] text-[#6E7269] hover:bg-[#FAF0E6]'
           }`}
         >
           <FileText className="w-4 h-4" />
@@ -163,7 +178,7 @@ export const StudentProfileView: React.FC = () => {
         <button
           onClick={() => setActiveTab('practice')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-            activeTab === 'practice' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:bg-slate-900'
+            activeTab === 'practice' ? 'bg-[#2D4A3E] text-[#FDFCF8] shadow-sm' : 'bg-[#FFFFFF] text-[#6E7269] hover:bg-[#FAF0E6]'
           }`}
         >
           <Target className="w-4 h-4" />
@@ -173,41 +188,41 @@ export const StudentProfileView: React.FC = () => {
         <button
           onClick={() => setActiveTab('dashboard_preview')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
-            activeTab === 'dashboard_preview' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:bg-slate-900'
+            activeTab === 'dashboard_preview' ? 'bg-[#3A5A40] text-[#FDFCF8] shadow-sm' : 'bg-[#FFFFFF] text-[#6E7269] hover:bg-[#FAF0E6]'
           }`}
         >
           <Eye className="w-4 h-4 text-amber-300" />
-          <span>Live Student Dashboard Preview</span>
+          <span>Live Student View Preview</span>
         </button>
       </div>
 
-      {/* TAB CONTENT 1: Error DNA & Mastery Analytics */}
+      {/* TAB CONTENT 1: Performance Score Graph & Error DNA */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
           {/* Student Performance Score & Evaluation Trend Graph */}
-          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E0DED7] pb-3">
               <div className="flex items-center space-x-2">
-                <TrendingUp className="w-5 h-5 text-emerald-400" />
+                <TrendingUp className="w-5 h-5 text-[#2D4A3E]" />
                 <div>
-                  <h3 className="text-base font-bold text-white">Student Performance & Evaluation Score Trend</h3>
-                  <p className="text-xs text-slate-400">Score tracked across evaluated tasks (Synchronized with Student Login)</p>
+                  <h3 className="text-base font-bold text-[#222521]">Student Performance & Evaluation Score Trend</h3>
+                  <p className="text-xs text-[#545850]">Score tracked across evaluated tasks (Synchronized with Student Login)</p>
                 </div>
               </div>
               <div className="text-right">
-                <span className="text-2xl font-black text-emerald-400">{studentPerformanceScore}%</span>
-                <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Overall Performance Score</span>
+                <span className="text-2xl font-black text-[#2D4A3E]">{studentPerformanceScore}%</span>
+                <span className="block text-[10px] text-[#6E7269] font-bold uppercase tracking-wider">Overall Performance Score</span>
               </div>
             </div>
 
             <div className="h-60 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={performanceGraphData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="task" stroke="#94a3b8" fontSize={11} />
-                  <YAxis domain={[0, 100]} stroke="#94a3b8" fontSize={11} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', borderRadius: '12px' }} />
-                  <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={3} dot={{ r: 6, fill: '#10b981' }} name="Performance Score %" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E0DED7" />
+                  <XAxis dataKey="task" stroke="#6E7269" fontSize={11} />
+                  <YAxis domain={[0, 100]} stroke="#6E7269" fontSize={11} />
+                  <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E0DED7', color: '#222521', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }} />
+                  <Line type="monotone" dataKey="score" stroke="#2D4A3E" strokeWidth={3} dot={{ r: 6, fill: '#2D4A3E' }} name="Performance Score %" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -215,12 +230,12 @@ export const StudentProfileView: React.FC = () => {
 
           {/* Early Support Alert Card */}
           {student.early_support_alert && (
-            <div className="p-5 rounded-3xl bg-rose-950/30 border border-rose-500/40 text-rose-200 flex items-start space-x-3 shadow-xl">
-              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="p-5 rounded-3xl bg-[#FDF0EE] border border-[#ECC4C1] text-[#8C2B22] flex items-start space-x-3 shadow-xs">
+              <AlertTriangle className="w-5 h-5 text-[#C85A54] shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-extrabold text-sm text-white">Early Support Alert</h3>
-                <p className="text-xs text-rose-300 mt-0.5 leading-relaxed">{student.alert_reason}</p>
-                <span className="text-[10px] font-semibold text-rose-400 uppercase tracking-wider block mt-2">
+                <h3 className="font-extrabold text-sm text-[#222521]">Early Support Alert</h3>
+                <p className="text-xs text-[#8C2B22] mt-0.5 leading-relaxed">{student.alert_reason}</p>
+                <span className="text-[10px] font-semibold text-[#C85A54] uppercase tracking-wider block mt-2">
                   Recommended: Provide targeted sign-handling practice before next quiz.
                 </span>
               </div>
@@ -228,45 +243,45 @@ export const StudentProfileView: React.FC = () => {
           )}
 
           {/* Main Grid: Strengths/Needs & Error DNA */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Error DNA Visualization */}
-            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-              <h3 className="text-base font-bold text-white border-b border-slate-800 pb-3 flex items-center justify-between">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Error DNA Breakdown */}
+            <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm space-y-4">
+              <h3 className="text-base font-bold text-[#222521] border-b border-[#E0DED7] pb-3 flex items-center justify-between">
                 <span>Error DNA Breakdown</span>
-                <span className="text-xs text-rose-400 font-semibold">{student.common_error} ({student.error_frequency} occurrences)</span>
+                <span className="text-xs text-[#C85A54] font-semibold">{student.common_error} ({student.error_frequency} occurrences)</span>
               </h3>
 
               <div className="h-56 w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={student.error_dna} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" fontSize={11} />
-                    <YAxis dataKey="category" type="category" width={110} stroke="#94a3b8" fontSize={11} />
-                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc', borderRadius: '8px' }} />
-                    <Bar dataKey="percentage" fill="#ef4444" radius={[0, 8, 8, 0]} name="Occurrence %" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#E0DED7" />
+                    <XAxis type="number" domain={[0, 100]} stroke="#6E7269" fontSize={11} />
+                    <YAxis dataKey="category" type="category" width={110} stroke="#6E7269" fontSize={11} />
+                    <Tooltip contentStyle={{ backgroundColor: '#FFFFFF', borderColor: '#E0DED7', color: '#222521', borderRadius: '8px' }} />
+                    <Bar dataKey="percentage" fill="#C85A54" radius={[0, 8, 8, 0]} name="Occurrence %" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
             {/* Strengths & Weaknesses */}
-            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-6 flex flex-col justify-between">
+            <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm space-y-6 flex flex-col justify-between">
               <div>
-                <h3 className="text-base font-bold text-white border-b border-slate-800 pb-3">Learning Profile Summary</h3>
+                <h3 className="text-base font-bold text-[#222521] border-b border-[#E0DED7] pb-3">Learning Profile Summary</h3>
 
                 <div className="grid grid-cols-2 gap-4 mt-4 text-xs">
-                  <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-2">
-                    <span className="font-extrabold text-emerald-400 uppercase tracking-wider text-[10px] block">Strengths</span>
-                    <ul className="list-disc list-inside space-y-1 text-slate-300 font-medium">
+                  <div className="p-4 rounded-2xl bg-[#EAF0E8] border border-[#C2D4C1] space-y-2">
+                    <span className="font-extrabold text-[#1E3A2B] uppercase tracking-wider text-[10px] block">Strengths</span>
+                    <ul className="list-disc list-inside space-y-1 text-[#222521] font-medium">
                       {student.strengths.map((str: string, i: number) => (
                         <li key={i}>{str}</li>
                       ))}
                     </ul>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-rose-950/20 border border-rose-500/30 space-y-2">
-                    <span className="font-extrabold text-rose-400 uppercase tracking-wider text-[10px] block">Needs Improvement</span>
-                    <ul className="list-disc list-inside space-y-1 text-slate-300 font-medium">
+                  <div className="p-4 rounded-2xl bg-[#FAF0E6] border border-[#E8CEB5] space-y-2">
+                    <span className="font-extrabold text-[#8C521F] uppercase tracking-wider text-[10px] block">Needs Improvement</span>
+                    <ul className="list-disc list-inside space-y-1 text-[#222521] font-medium">
                       {student.needs_improvement.map((ni: string, i: number) => (
                         <li key={i}>{ni}</li>
                       ))}
@@ -275,40 +290,40 @@ export const StudentProfileView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Learning Velocity</span>
-                <p className="text-slate-200 font-semibold">{student.learning_velocity}</p>
+              <div className="p-4 rounded-2xl bg-[#F4F2EC] border border-[#E0DED7] text-xs space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#2D4A3E]">Learning Velocity</span>
+                <p className="text-[#222521] font-bold">{student.learning_velocity}</p>
               </div>
             </div>
           </div>
 
           {/* Concept-Based Learning Gap Graph */}
-          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E0DED7] pb-3">
               <div className="flex items-center space-x-2">
-                <Network className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-base font-bold text-white">Concept-Based Learning Gap Graph</h3>
+                <Network className="w-5 h-5 text-[#2D4A3E]" />
+                <h3 className="text-base font-bold text-[#222521]">Concept-Based Learning Gap Graph</h3>
               </div>
-              <span className="text-xs text-slate-400">AI Diagnostic Prerequisite Hierarchy</span>
+              <span className="text-xs text-[#6E7269]">AI Diagnostic Prerequisite Hierarchy</span>
             </div>
 
-            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4 font-mono text-xs">
-              <div className="text-blue-400 font-bold text-sm">ALGEBRA</div>
-              <div className="pl-4 space-y-3 border-l-2 border-slate-800">
+            <div className="p-5 rounded-2xl bg-[#F4F2EC] border border-[#E0DED7] space-y-4 font-mono text-xs">
+              <div className="text-[#2D4A3E] font-bold text-sm">ALGEBRA</div>
+              <div className="pl-4 space-y-3 border-l-2 border-[#E0DED7]">
                 {student.topic_mastery.map((tm: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-[#FFFFFF] border border-[#E0DED7]">
                     <div className="flex items-center space-x-2">
-                      <span className="text-slate-500">├──</span>
-                      <span className="font-sans font-semibold text-slate-200">{tm.topic}</span>
+                      <span className="text-[#6E7269]">├──</span>
+                      <span className="font-sans font-semibold text-[#222521]">{tm.topic}</span>
                     </div>
                     <div className="flex items-center space-x-3">
                       <span className={`font-sans text-xs font-bold ${
-                        tm.mastery_percentage >= 80 ? 'text-emerald-400' : tm.mastery_percentage >= 60 ? 'text-amber-400' : 'text-rose-400'
+                        tm.mastery_percentage >= 80 ? 'text-[#2D4A3E]' : tm.mastery_percentage >= 60 ? 'text-[#C88A58]' : 'text-[#C85A54]'
                       }`}>
                         {tm.mastery_percentage}% mastery
                       </span>
                       <span className={`text-[10px] px-2 py-0.5 rounded font-sans font-bold ${
-                        tm.mastery_percentage >= 80 ? 'bg-emerald-500/20 text-emerald-300' : tm.mastery_percentage >= 60 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
+                        tm.mastery_percentage >= 80 ? 'bg-[#EAF0E8] text-[#1E3A2B] border border-[#C2D4C1]' : tm.mastery_percentage >= 60 ? 'bg-[#FAF0E6] text-[#8C521F] border border-[#E8CEB5]' : 'bg-[#FDF0EE] text-[#8C2B22] border border-[#ECC4C1]'
                       }`}>
                         {tm.mastery_percentage >= 80 ? 'Mastered' : tm.mastery_percentage >= 60 ? 'Developing' : 'Needs Support'}
                       </span>
@@ -316,7 +331,7 @@ export const StudentProfileView: React.FC = () => {
                   </div>
                 ))}
               </div>
-              <div className="text-[10px] text-slate-500 italic font-sans">
+              <div className="text-[10px] text-[#6E7269] italic font-sans">
                 Note: Prerequisite relationship paths are AI-generated diagnostic insights to guide remediation.
               </div>
             </div>
@@ -326,31 +341,31 @@ export const StudentProfileView: React.FC = () => {
 
       {/* TAB CONTENT 2: Submissions History */}
       {activeTab === 'submissions' && (
-        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-          <h3 className="font-bold text-white text-base border-b border-slate-800 pb-3">
+        <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm space-y-4">
+          <h3 className="font-bold text-[#222521] text-base border-b border-[#E0DED7] pb-3">
             Handwritten Submissions & Evaluation History ({studentSubmissions.length})
           </h3>
 
           {studentSubmissions.length === 0 ? (
-            <p className="text-xs text-slate-400">No submissions recorded for this student yet.</p>
+            <p className="text-xs text-[#6E7269]">No submissions recorded for this student yet.</p>
           ) : (
             <div className="space-y-3">
               {studentSubmissions.map((sub: any) => (
-                <div key={sub.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <div key={sub.id} className="p-4 rounded-2xl bg-[#FDFCF8] border border-[#E0DED7] space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-bold text-white text-sm">{sub.question}</span>
-                      <p className="text-[11px] text-slate-400 mt-0.5">Submitted on: {new Date(sub.created_at || Date.now()).toLocaleDateString()}</p>
+                      <span className="font-bold text-[#222521] text-sm">{sub.question}</span>
+                      <p className="text-[11px] text-[#6E7269] mt-0.5">Submitted on: {new Date(sub.created_at || Date.now()).toLocaleDateString()}</p>
                     </div>
                     <div className="text-right">
-                      <span className="text-base font-extrabold text-emerald-400">{sub.score} / {sub.max_score} Marks</span>
+                      <span className="text-base font-black text-[#2D4A3E]">{sub.score} / {sub.max_score} Marks</span>
                       {sub.teacher_overridden && (
-                        <span className="block text-[10px] text-amber-400 font-bold">Teacher Overridden</span>
+                        <span className="block text-[10px] text-[#C88A58] font-bold">Teacher Overridden</span>
                       )}
                     </div>
                   </div>
 
-                  <p className="text-xs text-slate-300 italic bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <p className="text-xs text-[#545850] italic bg-[#FFFFFF] p-3 rounded-xl border border-[#E0DED7]">
                     "{sub.feedback}"
                   </p>
 
@@ -360,7 +375,7 @@ export const StudentProfileView: React.FC = () => {
                         setSelectedSubmission(sub);
                         setActiveView('evaluation');
                       }}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-blue-300 rounded-lg flex items-center space-x-1"
+                      className="px-3 py-1.5 bg-[#2D4A3E] hover:bg-[#1E3A2B] text-xs font-bold text-white rounded-lg flex items-center space-x-1 shadow-xs"
                     >
                       <span>Review Full Evaluation</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -375,22 +390,22 @@ export const StudentProfileView: React.FC = () => {
 
       {/* TAB CONTENT 3: Assigned Practice Sets */}
       {activeTab === 'practice' && (
-        <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-          <h3 className="font-bold text-white text-base border-b border-slate-800 pb-3">
+        <div className="bg-[#FFFFFF] p-6 rounded-3xl border border-[#E0DED7] shadow-sm space-y-4">
+          <h3 className="font-bold text-[#222521] text-base border-b border-[#E0DED7] pb-3">
             Assigned Targeted Practice & Reassessment ({studentPracticeSets.length})
           </h3>
 
           {studentPracticeSets.length === 0 ? (
-            <p className="text-xs text-slate-400">No practice sets assigned to this student yet.</p>
+            <p className="text-xs text-[#6E7269]">No practice sets assigned to this student yet.</p>
           ) : (
             <div className="space-y-3">
               {studentPracticeSets.map((ps: any) => (
-                <div key={ps.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs">
+                <div key={ps.id} className="p-4 rounded-2xl bg-[#FDFCF8] border border-[#E0DED7] flex items-center justify-between text-xs">
                   <div>
-                    <h4 className="font-bold text-white text-sm">{ps.target_concept}</h4>
-                    <p className="text-slate-400 text-[11px] mt-0.5">{ps.reason_for_practice}</p>
+                    <h4 className="font-bold text-[#222521] text-sm">{ps.target_concept}</h4>
+                    <p className="text-[#545850] text-[11px] mt-0.5">{ps.reason_for_practice}</p>
                     <span className={`inline-block mt-2 text-[10px] px-2 py-0.5 rounded font-bold ${
-                      ps.status === 'Completed' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                      ps.status === 'Completed' ? 'bg-[#EAF0E8] text-[#1E3A2B] border border-[#C2D4C1]' : 'bg-[#FAF0E6] text-[#8C521F] border border-[#E8CEB5]'
                     }`}>
                       {ps.status}
                     </span>
@@ -399,11 +414,11 @@ export const StudentProfileView: React.FC = () => {
                   <div className="text-right space-y-1">
                     {ps.status === 'Completed' ? (
                       <div>
-                        <span className="text-emerald-400 font-extrabold text-sm block">+{ps.improvement_delta}% Delta</span>
-                        <span className="text-slate-400 text-[10px]">Post Accuracy: {ps.after_accuracy}%</span>
+                        <span className="text-[#2D4A3E] font-black text-sm block">+{ps.improvement_delta}% Delta</span>
+                        <span className="text-[#6E7269] text-[10px]">Post Accuracy: {ps.after_accuracy}%</span>
                       </div>
                     ) : (
-                      <span className="text-slate-400 font-semibold">Pending Student Response</span>
+                      <span className="text-[#6E7269] font-semibold">Pending Student Response</span>
                     )}
                   </div>
                 </div>
@@ -416,15 +431,15 @@ export const StudentProfileView: React.FC = () => {
       {/* TAB CONTENT 4: Live Student Dashboard Preview */}
       {activeTab === 'dashboard_preview' && (
         <div className="space-y-4">
-          <div className="p-4 bg-indigo-950/60 border border-indigo-500/40 rounded-2xl text-xs text-indigo-200 flex items-center justify-between">
+          <div className="p-4 bg-[#FAF0E6] border border-[#E8CEB5] rounded-2xl text-xs text-[#8C521F] flex items-center justify-between shadow-xs">
             <div className="flex items-center space-x-2">
-              <Eye className="w-4 h-4 text-amber-300" />
+              <Eye className="w-4 h-4 text-[#C88A58]" />
               <span>Viewing Live Student Dashboard Preview for <strong>{student.name}</strong></span>
             </div>
-            <span className="px-2.5 py-0.5 rounded bg-indigo-500/30 text-white font-bold text-[10px]">Teacher Inspection Mode</span>
+            <span className="px-2.5 py-0.5 rounded bg-[#2D4A3E] text-white font-bold text-[10px]">Teacher Inspection Mode</span>
           </div>
 
-          <div className="border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+          <div className="border border-[#E0DED7] rounded-3xl overflow-hidden shadow-sm">
             <StudentDashboard />
           </div>
         </div>

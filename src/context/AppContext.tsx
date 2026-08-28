@@ -87,12 +87,15 @@ interface AppContextType {
     student_name?: string;
     feedback_mode?: FeedbackMode;
     curriculum_id?: string;
+    question_paper_id?: string;
   }) => Promise<SubmissionAnalysis>;
   overrideGrade: (submissionId: string, newScore: number, comment?: string) => Promise<void>;
   generateTargetedPractice: (studentId: string, concept: string, errorType: string) => Promise<PracticeSet>;
   submitPracticeAnswers: (practiceSetId: string, answers: Record<string, string>) => Promise<any>;
   askSimulator: (query: string) => Promise<SimulatorQueryResponse>;
   generateRemedialAssignment: (topic: string) => Promise<any>;
+  uploadQuestionPaper: (payload: { title?: string; file_name?: string; file_base64?: string; topic?: string; max_marks?: number }) => Promise<any>;
+  deleteQuestionPaper: (id: string) => Promise<void>;
   fetchDataset1: () => Promise<{ total: number; items: any[] }>;
 }
 
@@ -645,6 +648,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const uploadQuestionPaper = async (payload: {
+    title?: string;
+    file_name?: string;
+    file_base64?: string;
+    topic?: string;
+    max_marks?: number;
+  }) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/question-papers/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          teacher_id: userSession?.id || 'usr_teacher_demo',
+        }),
+      });
+      if (!res.ok) {
+        throw new Error('Failed to upload question paper');
+      }
+      const data = await res.json();
+      addToast(`Saved question paper "${data.paper.title}" to database!`, 'success');
+      await refreshState();
+      return data.paper;
+    } catch (err: any) {
+      addToast(err.message || 'Failed to upload question paper', 'error');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteQuestionPaper = async (id: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/question-papers/${id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        addToast('Question paper deleted from database.', 'success');
+        await refreshState();
+      } else {
+        addToast('Failed to delete question paper', 'error');
+      }
+    } catch (err: any) {
+      addToast('Failed to delete question paper from database', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const resetToDemo = async () => {
     try {
       setIsLoading(true);
@@ -669,13 +723,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const analyzeHandwriting = async (payload: {
     image_base64?: string;
-    question: string;
+    question?: string;
     topic?: string;
     subject?: string;
     max_marks?: number;
     student_id?: string;
     student_name?: string;
     feedback_mode?: FeedbackMode;
+    curriculum_id?: string;
+    question_paper_id?: string;
   }): Promise<SubmissionAnalysis> => {
     setIsLoading(true);
     try {
@@ -845,6 +901,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitPracticeAnswers,
         askSimulator,
         generateRemedialAssignment,
+        uploadQuestionPaper,
+        deleteQuestionPaper,
         fetchDataset1,
       }}
     >

@@ -102,6 +102,12 @@ export interface SubmissionAnalysis {
   teacher_overridden?: boolean;
   teacher_score_override?: number;
   teacher_comment?: string;
+  curriculum_id?: string;
+  curriculum_name?: string;
+  question_paper_id?: string;
+  question_paper_title?: string;
+  extracted_question?: string;
+  extracted_topic?: string;
   created_at: string;
 }
 

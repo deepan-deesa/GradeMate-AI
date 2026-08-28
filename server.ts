@@ -184,17 +184,20 @@ async function startServer() {
         });
 
         // Filter scopedStudents strictly by validStudentProfileIds / relMap for reqTeacherId
-        const scopedStudents = (db.students || []).filter((s: any) =>
-          validStudentProfileIds.has(s.id) ||
-          relMap.has(s.id) ||
-          (s.email && relMap.has(s.email)) ||
-          s.teacherId === reqTeacherId ||
-          s.teacher_id === reqTeacherId
-        );
+        const scopedStudents = (db.students || []).filter((s: any) => {
+          if (!reqTeacherId) return false;
+          return (
+            validStudentProfileIds.has(s.id) ||
+            relMap.has(s.id) ||
+            (Boolean(s.email) && relMap.has(s.email)) ||
+            (Boolean(s.teacherId) && s.teacherId === reqTeacherId) ||
+            (Boolean(s.teacher_id) && s.teacher_id === reqTeacherId)
+          );
+        });
 
 
         const scopedAssignments = (db.assignments || []).filter(
-          (a: any) => a.teacherId === reqTeacherId || a.teacher_id === reqTeacherId
+          (a: any) => (Boolean(a.teacherId) && a.teacherId === reqTeacherId) || (Boolean(a.teacher_id) && a.teacher_id === reqTeacherId)
         );
         const scopedSubmissions = (db.submissions || []).filter(
           (sub: any) => assignedStudentIds.includes(sub.student_id) || sub.teacher_id === reqTeacherId

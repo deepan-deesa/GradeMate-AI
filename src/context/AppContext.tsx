@@ -314,17 +314,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       setIsLoading(true);
 
-      // Auto-backfill teacher_id in User table for any student rows with teacher_id = NULL
-      if (activeSession?.id && (activeSession.role === 'TEACHER' || (activeSession.role as string)?.toUpperCase() === 'TEACHER')) {
-        try {
-          await supabase
-            .from('User')
-            .update({ teacher_id: activeSession.id, teacherId: activeSession.id })
-            .eq('role', 'STUDENT')
-            .is('teacher_id', null);
-        } catch (e) {}
-      }
-
       const queryParams = new URLSearchParams();
       if (activeSession?.id) {
         queryParams.append('teacherId', activeSession.id);

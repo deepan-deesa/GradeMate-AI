@@ -375,7 +375,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const [currRes, asgnRes, stdRes] = await Promise.all([
           teacherId ? supabase.from('Curriculum').select('*').eq('teacherId', teacherId) : supabase.from('Curriculum').select('*'),
           teacherId ? supabase.from('Assessment').select('*').eq('teacherId', teacherId) : supabase.from('Assessment').select('*'),
-          supabase.from('User').select('*').eq('role', 'STUDENT'),
+          (activeSession?.role === 'TEACHER' && teacherId)
+            ? supabase.from('User').select('*').eq('role', 'STUDENT').or(`teacherId.eq.${teacherId},teacher_id.eq.${teacherId}`)
+            : supabase.from('User').select('*').eq('role', 'STUDENT'),
         ]);
 
         const curriculaData = (currRes.data || []).map((c: any) => ({

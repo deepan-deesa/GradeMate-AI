@@ -250,14 +250,9 @@ export const TeacherDashboard: React.FC = () => {
       }
 
       if (success) {
-        if (returnedInviteUrl) {
-          setCreatedInviteUrl(returnedInviteUrl);
-        } else {
-          setShowAddStudentModal(false);
-          setNewStudentName('');
-          setNewStudentEmail('');
-          addToast(`Student ${cleanName} added and mapped to your teacher account!`, 'success');
-        }
+        const inviteUrl = returnedInviteUrl || `${window.location.origin}/login?email=${encodeURIComponent(cleanEmail)}&role=STUDENT`;
+        setCreatedInviteUrl(inviteUrl);
+        addToast(`Student ${cleanName} added and mapped to your teacher account!`, 'success');
         await refreshState();
       } else {
         addToast('Failed to add student. Please try again.', 'error');
